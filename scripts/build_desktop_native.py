@@ -113,7 +113,8 @@ def metadata(jars, substrate, output):
     (output / "reflect-config.json").write_text(json.dumps(reflection))
     (output / "jni-config.json").write_text(json.dumps(jni))
     (output / "resource-config.json").write_text(json.dumps({"resources": {"includes": [
-        {"pattern": r".*\.(css|bss|png|jpg|jpeg|gif|bmp|ttf|otf|txt|raw|xml|fxml|gls|json|dat|frag|vert)$"}]},
+        {"pattern": r".*\.(css|bss|svg|png|jpg|jpeg|gif|bmp|ttf|otf|txt|raw|xml|fxml|gls|json|dat|frag|vert)$"},
+        {"pattern": r"io/github/dreamlike/llmcomment/desktop/file-icons/.*"}]},
         "bundles": [{"name": name.replace("/", ".")} for name in sorted(bundles)]}))
 
 
@@ -153,6 +154,11 @@ def main():
                     licenses / "fonts", dirs_exist_ok=True)
     shutil.copytree(target / "classes/io/github/dreamlike/llmcomment/desktop/javafx-compat",
                     licenses / "javafx-compat", dirs_exist_ok=True)
+    icon_licenses = licenses / "material-icon-theme"
+    icon_licenses.mkdir(parents=True, exist_ok=True)
+    for name in ["LICENSE", "SOURCE.md"]:
+        shutil.copy2(target / "classes/io/github/dreamlike/llmcomment/desktop/file-icons" / name,
+                     icon_licenses / name)
     with zipfile.ZipFile(substrate) as archive:
         for name in archive.namelist():
             if any(token in name.upper() for token in ["LICENSE", "NOTICE", "COPYING"]) and not name.endswith("/"):

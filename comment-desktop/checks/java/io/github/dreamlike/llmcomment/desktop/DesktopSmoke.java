@@ -91,6 +91,10 @@ final class DesktopSmoke {
                 idle(app);
                 fx(
                     () -> {
+                      require(app.selected == null && app.source.startLine() == 0, "打开文件自动选中了评论");
+                      SourceInteractionCheck.assertMarker(app.source, 4, 1);
+                      SourceInteractionCheck.assertMarker(app.source, 5, 0);
+                      SourceInteractionCheck.assertMarker(app.source, 6, 0);
                       app.comments.getSelectionModel().selectFirst();
                       return null;
                     });
@@ -106,6 +110,14 @@ final class DesktopSmoke {
                 require(
                     fx(() -> app.current.comments().getFirst().location().startLine() == 5),
                     "外部编辑后位置未平移");
+                fx(
+                    () -> {
+                      SourceInteractionCheck.assertMarker(app.source, 4, 0);
+                      SourceInteractionCheck.assertMarker(app.source, 5, 1);
+                      SourceInteractionCheck.assertMarker(app.source, 6, 0);
+                      SourceInteractionCheck.assertHighlighted(app.source, 5, 7);
+                      return null;
+                    });
                 fx(
                     () -> {
                       app.author.setText("另一位审阅者");
@@ -314,11 +326,9 @@ final class DesktopSmoke {
     }
     fx(
         () -> {
-          require(app.source.commentsAtLine(7).size() == 4, "交叉、包含或同范围评论丢失");
-          require(app.source.commentsAtLine(9).size() == 2, "共线边界没有同时包含两条评论");
           SourceInteractionCheck.verifyMarkers(app.source, app.current.comments());
-          var menu = SourceInteractionCheck.clickMarker(app.source, 7);
-          require(menu != null && menu.getItems().size() == 4, "行标记菜单没有列出全部评论");
+          var menu = SourceInteractionCheck.clickMarker(app.source, 5);
+          require(menu != null && menu.getItems().size() == 2, "起始行菜单没有列出全部同起点评论");
           menu.getItems().getFirst().fire();
           menu.hide();
           return null;
@@ -326,6 +336,23 @@ final class DesktopSmoke {
     idle(app);
     require(
         fx(() -> app.selected != null && app.draftTitle.getText().equals("编辑评论")), "标记选择评论误切到新增");
+    for (var comment : added) {
+      fx(
+          () -> {
+            app.comments.getSelectionModel().select(comment);
+            return null;
+          });
+      idle(app);
+      fx(
+          () -> {
+            SourceInteractionCheck.assertHighlighted(
+                app.source, comment.location().startLine(), comment.location().endLine());
+            require(
+                app.source.selectedText().equals(comment.location().selectedText()),
+                "侧栏选中评论后高亮的原文不完整");
+            return null;
+          });
+    }
     fx(
         () -> {
           int line = app.selected.location().startLine();
@@ -397,7 +424,7 @@ final class DesktopSmoke {
       }
       require(expanded, "实际目录树没有展开：" + path);
     }
-    System.out.println("交互检查通过：目录树、自动新增、Shift 范围、交叉/包含/同范围/共线评论、标记菜单及草稿保护");
+    System.out.println("交互检查通过：目录树、自动新增、Shift 范围、起始行标记、同起点菜单、交叉范围完整高亮及草稿保护");
   }
 
   private static void idle(DesktopApplication app) throws Exception {

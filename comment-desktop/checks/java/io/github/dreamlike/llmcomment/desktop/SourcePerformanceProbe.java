@@ -153,7 +153,7 @@ public final class SourcePerformanceProbe {
             var marker = (Label) cell.lookup(".line-marker");
             var tooltip = marker.getTooltip();
             tooltip.show(marker, 20, 20);
-            if (tooltip.getText().lines().count() != source.commentsAtLine(1).size()
+            if (tooltip.getText().lines().count() != source.commentsStartingAtLine(1).size()
                 || !tooltip.getText().contains("作者")
                 || tooltip.getText().length() > 2000)
               throw new IllegalStateException("悬停说明未保留所有评论及摘要");

@@ -16,7 +16,7 @@ GluonFX 的旧链接器不能识别 GraalVM 25 的静态库目录，因此脚本
 - `jni-version.c` 调用原始 JavaFX 静态库初始化函数后，将成功返回的 JNI 1.6 版本声明提升到静态 JNI 要求的 1.8。原函数及失败返回值保留；`objcopy` 仅修改 `target` 内的库副本。
 - `desktop_native_gcc.py` 给 Graal 生成的导出表增加 `Java_*` 和 `JNI_*`，供 JavaFX 静态 JNI 查找。它随后执行系统 `/usr/bin/gcc`；不改写原始 SDK 或 JDK。
 
-第三方版权与许可文件复制到 `target/desktop-native/licenses`，包括 SDK 随附法律文件、Substrate 的 LICENSE、所用 GluonFeature 源码及来源链接。发布可执行文件时需要一并保留这些材料；此构建配置不替项目选择根许可证。
+第三方版权与许可文件复制到 `target/desktop-native/licenses`，包括 SDK 随附法律文件、Substrate 的 LICENSE、所用 GluonFeature 源码及来源链接。文件类型图标的 SVG、MIT 许可证和来源清单嵌入程序，许可证与来源另存于 `licenses/material-icon-theme`。发布可执行文件时需要一并保留这些材料；此构建配置不替项目选择根许可证。
 
 桌面资源准备还会下载固定 SHA-256 的中文、生僻字及单色 emoji 字体，嵌入可执行文件。字体在启动时解压到临时目录，Fontconfig 的进程内配置通过 Java 25 FFM 调用；`reachability-metadata.json` 注册 downcall 签名。Linux 仍需系统 `libfontconfig.so.1`，不需要另行安装这些内置字体。
 

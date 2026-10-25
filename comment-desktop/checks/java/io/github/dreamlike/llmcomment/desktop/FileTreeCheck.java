@@ -70,7 +70,7 @@ final class FileTreeCheck {
       require(icon != FileTypeIcons.create(kind), "每次创建独立图形节点");
       icon.resize(24, 24);
       icon.layout();
-      require(icon.getChildrenUnmodifiable().size() == 1, "各类型必须有矢量图形");
+      require(icon.getChildrenUnmodifiable().size() == 1, "各类型必须从 SVG 资源生成独立矢量图形");
     }
   }
 

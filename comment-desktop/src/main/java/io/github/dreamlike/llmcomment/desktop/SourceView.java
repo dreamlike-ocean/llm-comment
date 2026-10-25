@@ -28,7 +28,7 @@ public final class SourceView extends BorderPane {
   private static final int DISPLAY_LIMIT = 10_000;
   private final ListView<SourceLines.Line> list = new ListView<>();
   private final ReadOnlyStringWrapper selectionText = new ReadOnlyStringWrapper("选择代码行");
-  private CommentRangeIndex markers = new CommentRangeIndex(List.of());
+  private CommentStartIndex markers = new CommentStartIndex(List.of());
   private Consumer<CommentView> commentChosen = ignored -> {};
   private Runnable userSelection = () -> {};
   private SourceLines source = new SourceLines("");
@@ -81,7 +81,7 @@ public final class SourceView extends BorderPane {
 
   public void show(String text, List<CommentView> comments) {
     source = new SourceLines(text);
-    markers = new CommentRangeIndex(comments);
+    markers = new CommentStartIndex(comments);
     clearSelection();
     list.setItems(FXCollections.observableArrayList(source.lines()));
     list.scrollTo(0);
@@ -95,8 +95,8 @@ public final class SourceView extends BorderPane {
     userSelection = java.util.Objects.requireNonNull(callback);
   }
 
-  List<CommentView> commentsAtLine(int line) {
-    return markers.at(line);
+  List<CommentView> commentsStartingAtLine(int line) {
+    return markers.startingAt(line);
   }
 
   private void notifyUserSelection() {
@@ -200,13 +200,13 @@ public final class SourceView extends BorderPane {
     private final Tooltip markerTooltip = new Tooltip();
     private List<CommentView> lineComments = List.of();
     private SourceLines.Line renderedLine;
-    private CommentRangeIndex renderedMarkers;
+    private CommentStartIndex renderedMarkers;
 
     private SourceCell() {
       getStyleClass().add("source-line");
       number.getStyleClass().add("line-number");
       marker.getStyleClass().add("line-marker");
-      // 单元会反复测量及复用；未悬停时无需为所有覆盖评论创建说明文本。
+      // 单元会反复测量及复用；未悬停时无需为起始于这一行的评论创建说明文本。
       markerTooltip.setOnShowing(
           ignored ->
               markerTooltip.setText(
@@ -259,7 +259,7 @@ public final class SourceView extends BorderPane {
       renderedLine = line;
       renderedMarkers = markers;
       number.setText(Integer.toString(line.number()));
-      var comments = markers.at(line.number());
+      var comments = markers.startingAt(line.number());
       lineComments = comments;
       boolean deleted = !comments.isEmpty() && comments.stream().allMatch(CommentView::deleted);
       marker.setText(

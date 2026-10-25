@@ -9,6 +9,7 @@ import javafx.event.EventType;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.input.MouseButton;
@@ -45,9 +46,10 @@ final class SourceInteractionCheck {
 
   static void verifyMarkers(SourceView source, List<CommentView> comments) {
     requireFxThread();
-    var expected = new CommentRangeIndex(comments).at(6);
-    if (expected.size() < 2 || source.commentsAtLine(6).size() != expected.size()) {
-      throw new IllegalStateException("第 6 行必须保留所有交叉评论");
+    var expected =
+        comments.stream().filter(comment -> comment.location().startLine() == 5).toList();
+    if (expected.size() != 2 || !source.commentsStartingAtLine(5).equals(expected)) {
+      throw new IllegalStateException("第 5 行必须保留两条同起点评论");
     }
     // 使用独立视图，检查回调时不替换应用控制器已安装的处理器。
     var check = new SourceView();
@@ -70,6 +72,16 @@ final class SourceInteractionCheck {
     try {
       check.applyCss();
       check.layout();
+      if (check.startLine() != 0 || check.endLine() != 0) {
+        throw new IllegalStateException("打开文件时不应自动高亮评论范围");
+      }
+      for (int line = 1; line <= 12; line++) {
+        int start = line;
+        var starting =
+            comments.stream().filter(comment -> comment.location().startLine() == start).toList();
+        assertMarker(check, line, starting.size());
+        assertMarker(source, line, starting.size());
+      }
       check.highlight(2, 3);
       check.selectLine(6);
       if (selectionEvents.get() != 0) {
@@ -87,9 +99,9 @@ final class SourceInteractionCheck {
                 + "，回调 "
                 + selectionEvents.get());
       }
-      var menu = clickMarker(check, 6);
+      var menu = clickMarker(check, 5);
       if (menu == null || menu.getItems().size() != expected.size()) {
-        throw new IllegalStateException("交叉评论菜单遗漏评论");
+        throw new IllegalStateException("同起点评论菜单遗漏评论");
       }
       try {
         for (var item : menu.getItems()) item.fire();
@@ -102,8 +114,51 @@ final class SourceInteractionCheck {
       } finally {
         menu.hide();
       }
+      selected.clear();
+      if (clickMarker(check, 6) != null
+          || !selected.equals(
+              List.of(
+                  comments.stream()
+                      .filter(comment -> comment.location().startLine() == 6)
+                      .findFirst()
+                      .orElseThrow()
+                      .id()))) {
+        throw new IllegalStateException("单个起始标记未直接选择对应评论");
+      }
+      // 不在起始行的标记槽必须为空，点击不能选中覆盖该行的评论。
+      selected.clear();
+      if (clickMarker(check, 8) != null || !selected.isEmpty()) {
+        throw new IllegalStateException("范围中间行仍存在评论标记");
+      }
+      check.show("源码\n".repeat(12), List.of());
+      assertMarker(check, 5, 0);
     } finally {
       stage.close();
+    }
+  }
+
+  static void assertMarker(SourceView source, int line, int count) {
+    var marker = (Label) cellAt(source, line).lookup(".line-marker");
+    String expected = count == 0 ? "" : "●" + (count > 1 ? Integer.toString(count) : "");
+    if (marker == null
+        || !marker.getText().equals(expected)
+        || (marker.getTooltip() == null) != (count == 0)) {
+      throw new IllegalStateException("第 " + line + " 行的起始标记错误，期望 " + expected);
+    }
+  }
+
+  static void assertHighlighted(SourceView source, int start, int end) {
+    var list = (ListView<?>) source.lookup(".list-view");
+    var selected = list.getSelectionModel().getSelectedIndices();
+    if (source.startLine() != start
+        || source.endLine() != end
+        || selected.size() != end - start + 1) {
+      throw new IllegalStateException("评论未完整高亮第 " + start + " 至 " + end + " 行");
+    }
+    for (int line = start; line <= end; line++) {
+      if (selected.get(line - start) != line - 1) {
+        throw new IllegalStateException("评论高亮遗漏第 " + line + " 行");
+      }
     }
   }
 

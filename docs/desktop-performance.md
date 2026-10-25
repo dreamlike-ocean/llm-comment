@@ -8,16 +8,18 @@
 
 探针使用 `SourceView`、应用字体、Material CSS 和 1280×900 场景。行高由字体及 CSS 决定，单行显示阈值为 10000 字符。
 
-- `init_ms`：`show` 开始到首次 CSS/布局完成，包含行切分、范围索引和可见单元初始化；不包含字体加载及窗口创建。
+- `init_ms`：`show` 开始到首次 CSS/布局完成，包含行切分、评论标记索引和可见单元初始化；不包含字体加载及窗口创建。
 - `jump_*`：预热 20 个 pulse 后，在 8 个不同 pulse 分别跳到文件末尾、中部、开头等位置；计时包括 `scrollTo` 和实际 CSS/布局，并断言目标单元已经生成。8 个样本的 p95 等于最大值。
 - `scroll_*`：向真实 `.virtual-flow` 节点发送 180 个每次向下 64 像素的 `ScrollEvent`，每个 pulse 一次；计时包括事件处理及布局，并断言实际前进超过 100 行。
 - `frame_*`：连续滚动阶段的 `AnimationTimer` 间隔，包含事件、布局、pulse/render 调度及上一帧的阻塞；`scrollTo` 的同步耗时另由跳转指标记录。测量包含从最后一次跳转进入滚动的间隔，因此能看到跳转后的长帧。
 - `heap_mib`：测量后请求一次 GC，再读取 JVM 已用堆；包含输入正文、行模型、JavaFX、字体及控件。进程 RSS 和峰值内存需另行采集。
 - `cells`：探针末尾场景图内的源码单元数。10 万与 100 万行都为 29，保持按可见行虚拟化。
 
-计时后还会校验混排选区的原始 CRLF/UTF-16 文本，并实际打开评论 Tooltip，确认每条覆盖评论都有摘要。字号、CSS 留白、空行布局和交叉评论选择另由 `SourceLayoutCheck`、`SourceInteractionCheck` 验证。
+计时后还会校验混排选区的原始 CRLF/UTF-16 文本，并实际打开评论 Tooltip，确认起始于该行的每条评论都有摘要。字号、CSS 留白、空行布局和交叉评论选择另由 `SourceLayoutCheck`、`SourceInteractionCheck` 验证。
 
 ## 2026-10-25 实测
+
+下表记录 Tooltip 与 `VirtualFlow` 优化时的数据，当时评论范围内的每一行都显示标记。后续界面改为仅在起始行显示标记，并用 `CommentStartIndex` 替代区间树；这些历史数据不作为新标记逻辑的测量结果。
 
 以下均为 JVM 测量，环境为 Linux x64、Oracle GraalVM Java 25.0.2、JavaFX 21.0.8、同一 DISPLAY，JVM 参数为 `-Xms256m -Xmx2g`。原生 O3 程序的功能回归与这些数据分开记录，JVM 数字不能用作原生程序的性能结论。测量使用日常桌面会话，未隔离其他进程、JIT 编译或运行期间的 GC；帧间隔包含这些停顿及渲染调度噪声，测量后的主动 GC 位于计时范围之外。每个配置各启动一次新 JVM，前后数据、参数和探针相同，按基线、优化版成对顺序执行。基线使用修改前的 `SourceView`，优化版仅替换该类，其他类、资源均来自同一个桌面 JAR。
 
@@ -115,4 +117,12 @@ lines=1000000 init_ms=151.605 jump_p95_ms=327.942 jump_max_ms=327.942 scroll_p95
 lines=1000000 init_ms=148.572 jump_p95_ms=21.874 jump_max_ms=21.874 scroll_p95_ms=7.063 scroll_max_ms=11.887 frame_p95_ms=17.439 frame_max_ms=22.102 heap_mib=121.9 cells=29
 lines=1000000 init_ms=151.859 jump_p95_ms=323.590 jump_max_ms=323.590 scroll_p95_ms=203.363 scroll_max_ms=229.225 frame_p95_ms=204.183 frame_max_ms=229.403 heap_mib=122.4 cells=29
 lines=1000000 init_ms=148.383 jump_p95_ms=21.725 jump_max_ms=21.725 scroll_p95_ms=7.095 scroll_max_ms=7.892 frame_p95_ms=17.555 frame_max_ms=21.722 heap_mib=122.4 cells=29
+```
+
+## 起始行标记复核
+
+评论圆点改为仅显示当前起始行后，`CommentStartIndex` 按起始行聚合，查询直接复用该行的不可变列表；范围长度不增加索引空间。百万行密集评论复核仍使用 `-O3` 独立检查程序、`-Xms256m -Xmx2g` 及相同样本，全部构建结束后单独运行一次。选区原文和同起点评论 Tooltip 检查通过。滚动 p95 为 7.336 ms，未观察到相较此前约 7 ms 的明显整体变化；此次主要改变标记密度和查询逻辑。
+
+```text
+lines=1000000 init_ms=148.133 jump_p95_ms=21.507 jump_max_ms=21.507 scroll_p95_ms=7.336 scroll_max_ms=8.715 frame_p95_ms=17.622 frame_max_ms=22.971 heap_mib=122.4 cells=29
 ```
