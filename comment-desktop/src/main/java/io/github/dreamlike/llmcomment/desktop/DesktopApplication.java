@@ -17,6 +17,8 @@ import javafx.geometry.Rectangle2D;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
@@ -31,7 +33,7 @@ public final class DesktopApplication extends Application {
   static volatile int exitCode;
   final BooleanProperty busy = new SimpleBooleanProperty();
   final SourceView source = new SourceView();
-  final ListView<WorkspaceModel.Entry> files = new ListView<>();
+  final FileTreeView files = new FileTreeView(this::loadDirectory, this::openFile);
   final ListView<CommentView> comments = new ListView<>();
   final ListView<RevisionView> revisions = new ListView<>();
   final TextArea body = new TextArea();
@@ -70,8 +72,6 @@ public final class DesktopApplication extends Application {
   private boolean changing;
   private boolean closed;
   private long generation;
-  private String directory = "";
-  private List<WorkspaceModel.Entry> entries = List.of();
   private final ExecutorService worker =
       Executors.newSingleThreadExecutor(Thread.ofPlatform().name("desktop-io").daemon().factory());
 
@@ -82,7 +82,12 @@ public final class DesktopApplication extends Application {
 
   @Override
   public void start(Stage window) throws Exception {
+    DesktopInputMethods.initialize();
     stage = window;
+    String iconUrl = getClass().getResource("app-icon.png").toExternalForm();
+    for (int size : new int[] {16, 32, 48, 64, 128, 256}) {
+      stage.getIcons().add(new Image(iconUrl, size, size, true, true));
+    }
     root = new BorderPane();
     root.getStyleClass().addAll("root", "workbench");
     root.setTop(header());
@@ -162,7 +167,11 @@ public final class DesktopApplication extends Application {
   }
 
   private Node header() {
-    Label mark = label("注", "brand-mark");
+    ImageView mark =
+        new ImageView(new Image(getClass().getResource("app-icon.png").toExternalForm()));
+    mark.setFitWidth(48);
+    mark.setFitHeight(48);
+    mark.setPreserveRatio(true);
     VBox brand =
         new VBox(2, label("行间", "brand-title"), label("LOCAL CODE COMMENTS", "brand-caption"));
     HBox identity = new HBox(12, mark, brand);
@@ -254,53 +263,12 @@ public final class DesktopApplication extends Application {
   }
 
   private Node fileBrowser() {
-    Button parent = button("上一级", "text-button");
-    parent.disableProperty().bind(busy);
-    parent.setOnAction(
-        event -> {
-          if (!directory.isEmpty()) {
-            int slash = directory.lastIndexOf('/');
-            openDirectory(slash < 0 ? "" : directory.substring(0, slash));
-          }
-        });
-    HBox heading = new HBox(8, label("文件", "section-title"), spacer(), parent);
+    HBox heading = new HBox(8, label("文件", "section-title"), spacer());
     heading.setAlignment(Pos.CENTER_LEFT);
-    filter.setPromptText("搜索此目录");
-    filter.textProperty().addListener((o, before, after) -> filterEntries());
-    files.getStyleClass().add("file-list");
-    files.setPlaceholder(label("此目录没有匹配的文件", "empty-state"));
-    files.setCellFactory(
-        list ->
-            new ListCell<>() {
-              @Override
-              protected void updateItem(WorkspaceModel.Entry entry, boolean empty) {
-                super.updateItem(entry, empty);
-                if (empty || entry == null) {
-                  setGraphic(null);
-                  setText(null);
-                  return;
-                }
-                Label icon =
-                    label(
-                        entry.directory() ? "▸" : "·",
-                        entry.directory() ? "folder-icon" : "file-icon");
-                Label name = label(entry.name(), "entry-name");
-                HBox row = new HBox(10, icon, name);
-                row.setAlignment(Pos.CENTER_LEFT);
-                setGraphic(row);
-                setText(null);
-              }
-            });
-    files.setOnMouseClicked(
-        event -> {
-          if (event.getClickCount() == 2) openEntry();
-        });
-    files.setOnKeyPressed(
-        event -> {
-          if (event.getCode() == KeyCode.ENTER) openEntry();
-        });
+    filter.setPromptText("筛选已加载文件");
+    filter.textProperty().addListener((o, before, after) -> files.setFilter(after));
     VBox browser =
-        new VBox(14, heading, directoryLabel, filter, files, label("双击打开 · Enter 进入", "muted"));
+        new VBox(14, heading, directoryLabel, filter, files, label("展开目录 · 双击打开文件", "muted"));
     browser.setMinWidth(210);
     browser.setPrefWidth(280);
     browser.setMaxWidth(400);
@@ -457,6 +425,14 @@ public final class DesktopApplication extends Application {
     source.disableProperty().bind(busy);
     busy.addListener((o, before, after) -> updateActions());
     source.selectionTextProperty().addListener((o, before, after) -> updateActions());
+    source.onUserSelection(this::beginCommentFromSelection);
+    source.onCommentChosen(
+        comment -> {
+          if (busy.get()) return;
+          tabs.getSelectionModel().select(0);
+          comments.getSelectionModel().select(comment);
+          comments.scrollTo(comment);
+        });
     body.textProperty().addListener((o, before, after) -> editorChanged());
     author.textProperty().addListener((o, before, after) -> editorChanged());
     newComment.setOnAction(event -> beginComment());
@@ -492,7 +468,8 @@ public final class DesktopApplication extends Application {
         () -> {
           WorkspaceModel next = new WorkspaceModel(workspace);
           try {
-            return new Opened(next, next.children(""));
+            next.children("");
+            return next;
           } catch (Exception e) {
             next.close();
             throw e;
@@ -500,18 +477,16 @@ public final class DesktopApplication extends Application {
         },
         opened -> {
           if (model != null) model.close();
-          model = opened.model();
+          model = opened;
           workspaceTitle.setText(
               workspace.root().getFileName() == null
                   ? workspace.root().toString()
                   : workspace.root().getFileName().toString());
           workspacePath.setText(workspace.root().toString());
           workspacePath.setTooltip(new Tooltip(workspace.root().toString()));
-          directory = "";
           directoryLabel.setText("/");
-          entries = opened.entries();
           filter.clear();
-          filterEntries();
+          files.reset(workspaceTitle.getText());
           clearFile();
           if (initialFile != null) Platform.runLater(() -> openFile(initialFile));
         });
@@ -525,35 +500,30 @@ public final class DesktopApplication extends Application {
     if (chosen != null) openWorkspace(Workspace.resolve(Path.of("."), chosen.toPath(), null), null);
   }
 
-  private void openEntry() {
-    WorkspaceModel.Entry entry = files.getSelectionModel().getSelectedItem();
-    if (entry == null || busy.get()) return;
-    if (entry.directory()) openDirectory(entry.path());
-    else openFile(entry.path());
-  }
-
-  private void openDirectory(String path) {
-    if (model == null || busy.get()) return;
-    runTask(
-        "正在读取目录…",
-        () -> model.children(path),
-        loaded -> {
-          directory = path;
-          directoryLabel.setText(path.isEmpty() ? "/" : path);
-          directoryLabel.setTooltip(new Tooltip(directoryLabel.getText()));
-          entries = loaded;
-          filter.clear();
-          filterEntries();
+  private void loadDirectory(String path, Consumer<List<WorkspaceModel.Entry>> completed) {
+    WorkspaceModel requested = model;
+    if (requested == null || closed) {
+      completed.accept(null);
+      return;
+    }
+    worker.submit(
+        () -> {
+          try {
+            var children = requested.children(path);
+            Platform.runLater(
+                () -> {
+                  if (!closed && model == requested) completed.accept(children);
+                });
+          } catch (Exception error) {
+            Platform.runLater(
+                () -> {
+                  if (!closed && model == requested) {
+                    completed.accept(null);
+                    report(error);
+                  }
+                });
+          }
         });
-  }
-
-  private void filterEntries() {
-    String query = filter.getText().toLowerCase(java.util.Locale.ROOT);
-    files.setItems(
-        FXCollections.observableArrayList(
-            entries.stream()
-                .filter(entry -> entry.name().toLowerCase(java.util.Locale.ROOT).contains(query))
-                .toList()));
   }
 
   void openFile(String file) {
@@ -565,8 +535,8 @@ public final class DesktopApplication extends Application {
 
   void refreshCurrent() {
     if (model == null || busy.get()) return;
+    files.refresh();
     if (current == null) {
-      openDirectory(directory);
       return;
     }
     String file = current.snapshot().file();
@@ -633,6 +603,23 @@ public final class DesktopApplication extends Application {
     clearDraft();
     tabs.getSelectionModel().select(0);
     body.requestFocus();
+  }
+
+  private void beginCommentFromSelection() {
+    if (changing || busy.get() || historical || current == null || source.startLine() == 0) return;
+    if (selected != null) {
+      if (!discardDraft()) {
+        highlight(selected);
+        return;
+      }
+      changing = true;
+      comments.getSelectionModel().clearSelection();
+      changing = false;
+      clearDraft();
+    }
+    tabs.getSelectionModel().select(0);
+    // 焦点留在源码，用户可以继续 Shift 扩展范围；新评论草稿随范围选择保留。
+    updateActions();
   }
 
   private void clearDraft() {
@@ -840,8 +827,6 @@ public final class DesktopApplication extends Application {
     worker.shutdownNow();
     if (model != null) model.close();
   }
-
-  private record Opened(WorkspaceModel model, List<WorkspaceModel.Entry> entries) {}
 
   private record Mutation(CommentView comment, FileComments file) {}
 

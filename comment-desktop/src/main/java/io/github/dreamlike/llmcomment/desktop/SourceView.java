@@ -1,23 +1,25 @@
 package io.github.dreamlike.llmcomment.desktop;
 
-import io.github.dreamlike.llmcomment.core.AnchorStatus;
 import io.github.dreamlike.llmcomment.core.CommentView;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.function.Consumer;
 import javafx.beans.property.ReadOnlyStringProperty;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.geometry.Pos;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 
@@ -26,7 +28,9 @@ public final class SourceView extends BorderPane {
   private static final int DISPLAY_LIMIT = 10_000;
   private final ListView<SourceLines.Line> list = new ListView<>();
   private final ReadOnlyStringWrapper selectionText = new ReadOnlyStringWrapper("选择代码行");
-  private final Map<Integer, Boolean> markers = new HashMap<>();
+  private CommentRangeIndex markers = new CommentRangeIndex(List.of());
+  private Consumer<CommentView> commentChosen = ignored -> {};
+  private Runnable userSelection = () -> {};
   private SourceLines source = new SourceLines("");
   private boolean selecting;
   private int first;
@@ -47,25 +51,56 @@ public final class SourceView extends BorderPane {
             event.consume();
           }
         });
+    list.addEventHandler(
+        MouseEvent.MOUSE_RELEASED,
+        event -> {
+          if (event.getButton() != javafx.scene.input.MouseButton.PRIMARY) return;
+          javafx.scene.Node target =
+              event.getTarget() instanceof javafx.scene.Node node ? node : null;
+          while (target != null && target != list) {
+            if (target instanceof ListCell<?> cell && !cell.isEmpty()) {
+              notifyUserSelection();
+              return;
+            }
+            target = target.getParent();
+          }
+        });
+    list.addEventHandler(
+        KeyEvent.KEY_RELEASED,
+        event -> {
+          if (event.getCode() == KeyCode.UP
+              || event.getCode() == KeyCode.DOWN
+              || event.getCode() == KeyCode.HOME
+              || event.getCode() == KeyCode.END
+              || event.getCode() == KeyCode.PAGE_UP
+              || event.getCode() == KeyCode.PAGE_DOWN
+              || (event.isShortcutDown() && event.getCode() == KeyCode.A)) notifyUserSelection();
+        });
     setCenter(list);
   }
 
   public void show(String text, List<CommentView> comments) {
     source = new SourceLines(text);
-    markers.clear();
-    for (var comment : comments) {
-      var location = comment.location();
-      if (location != null
-          && location.startLine() != null
-          && (location.status() == AnchorStatus.ACTIVE
-              || location.status() == AnchorStatus.MODIFIED)) {
-        // 同一行只要存在未删除评论，就使用正常标记。
-        markers.merge(location.startLine(), comment.deleted(), (left, right) -> left && right);
-      }
-    }
+    markers = new CommentRangeIndex(comments);
     clearSelection();
     list.setItems(FXCollections.observableArrayList(source.lines()));
     list.scrollTo(0);
+  }
+
+  public void onCommentChosen(Consumer<CommentView> callback) {
+    commentChosen = java.util.Objects.requireNonNull(callback);
+  }
+
+  public void onUserSelection(Runnable callback) {
+    userSelection = java.util.Objects.requireNonNull(callback);
+  }
+
+  List<CommentView> commentsAtLine(int line) {
+    return markers.at(line);
+  }
+
+  private void notifyUserSelection() {
+    if (first != 0) userSelection.run();
   }
 
   public void highlight(int startLine, int endLine) {
@@ -138,6 +173,24 @@ public final class SourceView extends BorderPane {
     selectionText.set(first == last ? "第 " + first + " 行" : "第 " + first + " 至 " + last + " 行");
   }
 
+  private static String commentLabel(CommentView comment) {
+    var location = comment.location();
+    String body = comment.body().replace('\n', ' ').replace('\r', ' ');
+    if (body.length() > 100) {
+      int end = Character.isHighSurrogate(body.charAt(99)) ? 99 : 100;
+      body = body.substring(0, end) + "…";
+    }
+    return (comment.deleted() ? "[已删除] " : "")
+        + "第 "
+        + location.startLine()
+        + " 至 "
+        + location.endLine()
+        + " 行 · "
+        + comment.author()
+        + " · "
+        + body;
+  }
+
   private final class SourceCell extends ListCell<SourceLines.Line> {
     private final Label number = new Label();
     private final Label marker = new Label();
@@ -148,6 +201,25 @@ public final class SourceView extends BorderPane {
       getStyleClass().add("source-line");
       number.getStyleClass().add("line-number");
       marker.getStyleClass().add("line-marker");
+      marker.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> event.consume());
+      marker.addEventFilter(MouseEvent.MOUSE_RELEASED, event -> event.consume());
+      marker.setOnMouseClicked(
+          event -> {
+            var line = getItem();
+            if (line == null) return;
+            var comments = markers.at(line.number());
+            if (comments.size() == 1) commentChosen.accept(comments.getFirst());
+            else if (!comments.isEmpty()) {
+              var menu = new ContextMenu();
+              for (var comment : comments) {
+                var item = new MenuItem(commentLabel(comment));
+                item.setOnAction(ignored -> commentChosen.accept(comment));
+                menu.getItems().add(item);
+              }
+              menu.show(marker, javafx.geometry.Side.BOTTOM, 0, 0);
+            }
+            event.consume();
+          });
       code.getStyleClass().add("code-text");
       row.getStyleClass().add("source-row");
       number.setAlignment(Pos.CENTER_RIGHT);
@@ -165,10 +237,23 @@ public final class SourceView extends BorderPane {
         return;
       }
       number.setText(Integer.toString(line.number()));
-      Boolean deleted = markers.get(line.number());
-      marker.setText(deleted == null ? "" : deleted ? "○" : "●");
-      marker.setOpacity(Boolean.TRUE.equals(deleted) ? 0.45 : 1);
-      marker.setTooltip(deleted == null ? null : new Tooltip(deleted ? "此行有已删除评论" : "此行有评论"));
+      var comments = markers.at(line.number());
+      boolean deleted = !comments.isEmpty() && comments.stream().allMatch(CommentView::deleted);
+      marker.setText(
+          comments.isEmpty()
+              ? ""
+              : (deleted ? "○" : "●")
+                  + (comments.size() > 99
+                      ? "99+"
+                      : comments.size() > 1 ? Integer.toString(comments.size()) : ""));
+      marker.setOpacity(deleted ? 0.45 : 1);
+      marker.setTooltip(
+          comments.isEmpty()
+              ? null
+              : new Tooltip(
+                  comments.stream()
+                      .map(SourceView::commentLabel)
+                      .collect(java.util.stream.Collectors.joining("\n"))));
       String value = line.text();
       if (value.length() > DISPLAY_LIMIT) {
         int boundary = DISPLAY_LIMIT;

@@ -22,4 +22,6 @@ GluonFX 的旧链接器不能识别 GraalVM 25 的静态库目录，因此脚本
 
 `prepare_desktop_javafx.py` 生成修订过的 OpenJFX 21.0.8 `PangoGlyphLayout`，修正不可见字形、补充平面字符的 UTF-16 索引及换行拆分后的 UTF-8 缓存。应用 classes 放在 JavaFX JAR 前，因此 JVM 和 Native Image 使用相同修补。字体许可证和排版兼容源码分别保留在发布目录的 `licenses/fonts` 与 `licenses/javafx-compat`。升级 JavaFX 后须重新验证字形光栅、完整混排及光标命中。
 
+`DesktopInputMethods` 在首个窗口创建前，通过 FFM 调用系统 Xlib 的 `XSetLocaleModifiers("")`，按现有 `XMODIFIERS` 初始化 Glass 使用的 XIM。对应 downcall 签名已注册到 Native Image 元数据。已运行 fcitx5 拼音的桌面会话可通过 `--ime-test 1` 或 `--ime-test 1.75` 检查实际中文输入；此检查发送系统按键，需要测试窗口持续获得焦点。
+
 来源：[Gluon Substrate](https://github.com/gluonhq/substrate/tree/0.0.69)、[JNI 静态库调用规范](https://docs.oracle.com/en/java/javase/25/docs/specs/jni/invocation.html#support-for-statically-linked-libraries)。

@@ -9,6 +9,10 @@ public final class Main {
 
   public static void main(String[] args) {
     try {
+      if (args.length > 0 && args[0].equals("--ime-test")) {
+        ImeCheck.main(java.util.Arrays.copyOfRange(args, 1, args.length));
+        return;
+      }
       DesktopOptions options = DesktopOptions.parse(args);
       if (options.help()) {
         System.out.println(

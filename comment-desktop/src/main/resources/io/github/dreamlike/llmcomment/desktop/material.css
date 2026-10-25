@@ -91,7 +91,7 @@
 .source-line:filled:hover { -fx-background-color: -app-surface-variant; }
 .source-line:filled:selected { -fx-background-color: -app-primary-container; }
 .line-number { -fx-font-family: "Noto Sans Mono CJK SC"; -fx-font-size: 0.75em; -fx-text-fill: -app-muted; -fx-min-width: 5.2em; -fx-pref-width: 5.2em; }
-.line-marker { -fx-text-fill: -app-primary; -fx-font-size: 0.75em; -fx-min-width: 1.34em; -fx-pref-width: 1.34em; -fx-max-width: 1.34em; }
+.line-marker { -fx-text-fill: -app-primary; -fx-font-size: 0.75em; -fx-min-width: 3em; -fx-pref-width: 3em; -fx-max-width: 3em; -fx-cursor: hand; }
 .code-text { -fx-font-family: "Noto Sans Mono CJK SC"; -fx-font-size: 1em; -fx-text-fill: -app-text; }
 .source-footer { -fx-padding: 8 14 8 20; -fx-border-color: -app-outline transparent transparent transparent; }
 .selection-label { -fx-font-size: 12px; -fx-text-fill: -app-primary; }
@@ -139,3 +139,8 @@
 .menu-item { -fx-padding: 8 14; -fx-background-radius: 6; }
 .menu-item:focused { -fx-background-color: -app-primary-container; }
 .menu-item .label { -fx-text-fill: -app-text; -fx-font-size: 1em; }
+.file-tree { -fx-background-color: transparent; -fx-background-insets: 0; -fx-padding: 0; }
+.file-tree .tree-cell { -fx-background-color: transparent; -fx-text-fill: -app-text; -fx-font-size: 0.875em; -fx-padding: 0.65em 0.4em; -fx-background-radius: 10; }
+.file-tree .tree-cell:filled:hover { -fx-background-color: -app-surface-variant; }
+.file-tree .tree-cell:filled:selected { -fx-background-color: -app-primary-container; }
+.file-tree .tree-cell > .tree-disclosure-node > .arrow { -fx-background-color: -app-primary; }

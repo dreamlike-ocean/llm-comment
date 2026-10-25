@@ -41,7 +41,8 @@ final class DesktopSmoke {
                         .replace("\n", "\r\n");
                 Files.writeString(source, original);
                 Files.writeString(workspace.resolve("README.md"), "# 行间\n本地源码评论示例\n");
-                Files.createDirectories(workspace.resolve("src"));
+                Files.createDirectories(workspace.resolve("src/main/java"));
+                Files.writeString(workspace.resolve("src/main/java/示例.java"), original);
                 fx(
                     () -> {
                       app.openWorkspace(Workspace.resolve(workspace, workspace, null), null);
@@ -151,6 +152,12 @@ final class DesktopSmoke {
                       app.stage.getScene().getRoot().layout();
                       var codeLabel = (javafx.scene.control.Label) app.source.lookup(".code-text");
                       require(codeLabel != null, "源码字形测试未找到可见行");
+                      FileTreeCheck.verify();
+                      require(
+                          app.stage.getIcons().size() >= 3
+                              && app.stage.getIcons().stream()
+                                  .noneMatch(javafx.scene.image.Image::isError),
+                          "应用图标加载失败");
                       FontRenderingCheck.verify(codeLabel.getFont(), app.body.getFont());
                       SourceLayoutCheck.verify(app.source);
                       require(
@@ -164,37 +171,6 @@ final class DesktopSmoke {
                       require(app.viewport.getZoom() == automatic, "未恢复指定缩放");
                       return null;
                     });
-                if (screenshot != null) {
-                  fx(
-                      () -> {
-                        app.stage.getScene().getRoot().applyCss();
-                        app.stage.getScene().getRoot().layout();
-                        require(
-                            app.columns.getItems().getFirst().getLayoutBounds().getWidth() <= 401,
-                            "目录栏随窗口过度扩张");
-                        var visible = app.viewport.getViewportBounds();
-                        var content = app.viewport.getContent().getLayoutBounds();
-                        double zoom = app.viewport.getZoom();
-                        if (visible.getWidth() >= 1050 * zoom
-                            && visible.getHeight() >= 720 * zoom) {
-                          require(
-                              content.getWidth() <= visible.getWidth()
-                                  && content.getHeight() <= visible.getHeight(),
-                              "正常尺寸产生额外滚动范围");
-                        }
-                        System.out.printf(
-                            "Desktop layout: %.0fx%.0f, scale=%.0f%%, sidebar=%.0f,"
-                                + " content=%.0fx%.0f%n",
-                            app.stage.getScene().getWidth(),
-                            app.stage.getScene().getHeight(),
-                            zoom * 100,
-                            app.columns.getItems().getFirst().getLayoutBounds().getWidth(),
-                            content.getWidth(),
-                            content.getHeight());
-                        PngSnapshot.write(app.stage.getScene().snapshot(null), screenshot);
-                        return null;
-                      });
-                }
                 // 新评论使用可见快照的版本；外部改动后保存应拒绝并保留草稿。
                 fx(
                     () -> {
@@ -243,6 +219,38 @@ final class DesktopSmoke {
                     "删除历史丢失");
                 require(app.model.history(created.id()).size() == 3, "删除未追加历史");
                 require(Files.readString(source).equals("// 再次插入\r\n" + moved), "评论操作改变源码");
+                verifyInteractions(app);
+                if (screenshot != null) {
+                  fx(
+                      () -> {
+                        app.stage.getScene().getRoot().applyCss();
+                        app.stage.getScene().getRoot().layout();
+                        require(
+                            app.columns.getItems().getFirst().getLayoutBounds().getWidth() <= 401,
+                            "目录栏随窗口过度扩张");
+                        var visible = app.viewport.getViewportBounds();
+                        var content = app.viewport.getContent().getLayoutBounds();
+                        double zoom = app.viewport.getZoom();
+                        if (visible.getWidth() >= 1050 * zoom
+                            && visible.getHeight() >= 720 * zoom) {
+                          require(
+                              content.getWidth() <= visible.getWidth()
+                                  && content.getHeight() <= visible.getHeight(),
+                              "正常尺寸产生额外滚动范围");
+                        }
+                        System.out.printf(
+                            "Desktop layout: %.0fx%.0f, scale=%.0f%%, sidebar=%.0f,"
+                                + " content=%.0fx%.0f%n",
+                            app.stage.getScene().getWidth(),
+                            app.stage.getScene().getHeight(),
+                            zoom * 100,
+                            app.columns.getItems().getFirst().getLayoutBounds().getWidth(),
+                            content.getWidth(),
+                            content.getHeight());
+                        PngSnapshot.write(app.stage.getScene().snapshot(null), screenshot);
+                        return null;
+                      });
+                }
                 require(DesktopApplication.exitCode == 0, "界面运行期间发生异常");
                 System.out.println(
                     "Desktop smoke passed: workspace, Chinese/CRLF/emoji, range, relocation,"
@@ -261,6 +269,134 @@ final class DesktopSmoke {
                 }
               }
             });
+  }
+
+  private static void verifyInteractions(DesktopApplication app) throws Exception {
+    fx(
+        () -> {
+          app.includeDeleted.fire();
+          return null;
+        });
+    idle(app);
+    int[][] ranges = {{5, 7}, {6, 9}, {5, 7}, {7, 7}, {9, 10}};
+    String[] bodies = {
+      "检查问候方法的输入边界", "交叉范围：中文、emoji 😀 与返回值", "同一范围的另一条建议", "包含范围：这一行需要测试", "边界共线：覆盖相邻代码"
+    };
+    java.util.List<CommentView> added = new java.util.ArrayList<>();
+    for (int i = 0; i < ranges.length; i++) {
+      final int index = i;
+      fx(
+          () -> {
+            SourceInteractionCheck.clickLine(app.source, ranges[index][0], false);
+            require(app.selected == null && app.body.getText().isEmpty(), "重新选代码未切到新增评论");
+            SourceInteractionCheck.clickLine(app.source, ranges[index][1], true);
+            require(
+                app.source.startLine() == ranges[index][0]
+                    && app.source.endLine() == ranges[index][1],
+                "Shift 选择范围错误");
+            require(
+                app.tabs.getSelectionModel().getSelectedIndex() == 0
+                    && app.draftTitle.getText().equals("新增评论"),
+                "新增评论界面未显示");
+            app.body.setText(bodies[index]);
+            app.save.fire();
+            return null;
+          });
+      idle(app);
+      CommentView created = fx(() -> app.selected);
+      added.add(created);
+      require(fx(() -> app.current.comments().size()) == i + 1, "新选区覆盖了已有评论");
+      for (int previous = 0; previous < added.size(); previous++) {
+        var expected = added.get(previous);
+        require(app.model.history(expected.id()).size() == 1, "新增交叉评论修改了其他评论历史");
+      }
+    }
+    fx(
+        () -> {
+          require(app.source.commentsAtLine(7).size() == 4, "交叉、包含或同范围评论丢失");
+          require(app.source.commentsAtLine(9).size() == 2, "共线边界没有同时包含两条评论");
+          SourceInteractionCheck.verifyMarkers(app.source, app.current.comments());
+          var menu = SourceInteractionCheck.clickMarker(app.source, 7);
+          require(menu != null && menu.getItems().size() == 4, "行标记菜单没有列出全部评论");
+          menu.getItems().getFirst().fire();
+          menu.hide();
+          return null;
+        });
+    idle(app);
+    require(
+        fx(() -> app.selected != null && app.draftTitle.getText().equals("编辑评论")), "标记选择评论误切到新增");
+    fx(
+        () -> {
+          int line = app.selected.location().startLine();
+          SourceInteractionCheck.clickLine(app.source, line, false);
+          require(app.selected == null, "同范围重新点击未进入新增评论");
+          app.body.setText("新评论草稿应保留");
+          SourceInteractionCheck.clickLine(app.source, line + 1, true);
+          require(app.body.getText().equals("新评论草稿应保留"), "延长选区丢失新增草稿");
+          app.body.clear();
+          app.comments.getSelectionModel().select(added.get(1));
+          return null;
+        });
+    idle(app);
+    fx(
+        () -> {
+          app.body.setText("已有评论的未保存修改");
+          Platform.runLater(
+              () -> {
+                var dialog =
+                    javafx.stage.Window.getWindows().stream()
+                        .filter(
+                            window ->
+                                window.isShowing()
+                                    && window.getScene() != null
+                                    && window.getScene().getRoot()
+                                        instanceof javafx.scene.control.DialogPane)
+                        .map(
+                            window -> (javafx.scene.control.DialogPane) window.getScene().getRoot())
+                        .findFirst()
+                        .orElseThrow();
+                ((javafx.scene.control.Button)
+                        dialog.lookupButton(javafx.scene.control.ButtonType.CANCEL))
+                    .fire();
+              });
+          SourceInteractionCheck.clickLine(app.source, 2, false);
+          require(
+              app.selected.id().equals(added.get(1).id())
+                  && app.body.getText().equals("已有评论的未保存修改"),
+              "取消切换丢失已有评论草稿");
+          require(app.source.startLine() == 6 && app.source.endLine() == 9, "取消切换未恢复评论范围");
+          app.body.setText(app.selected.body());
+          return null;
+        });
+    // 实际目录树逐层展开，等待每一层的后台读取完成。
+    for (String path : new String[] {"src", "src/main", "src/main/java"}) {
+      long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+      boolean expanded = false;
+      while (System.nanoTime() < deadline) {
+        expanded =
+            fx(
+                () -> {
+                  var queue =
+                      new java.util.ArrayDeque<
+                          javafx.scene.control.TreeItem<WorkspaceModel.Entry>>();
+                  queue.add(app.files.getRoot());
+                  while (!queue.isEmpty()) {
+                    var item = queue.removeFirst();
+                    if (item.getValue() != null && item.getValue().path().equals(path)) {
+                      item.setExpanded(true);
+                      return item.getChildren().stream()
+                          .anyMatch(child -> child.getValue() != null);
+                    }
+                    queue.addAll(item.getChildren());
+                  }
+                  return false;
+                });
+        if (expanded) break;
+        Thread.sleep(20);
+      }
+      require(expanded, "实际目录树没有展开：" + path);
+    }
+    System.out.println("交互检查通过：目录树、自动新增、Shift 范围、交叉/包含/同范围/共线评论、标记菜单及草稿保护");
   }
 
   private static void idle(DesktopApplication app) throws Exception {

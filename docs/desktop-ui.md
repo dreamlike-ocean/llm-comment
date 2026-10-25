@@ -8,9 +8,17 @@
 
 `WorkspaceModel` 封装 core API 和目录访问，不依赖 JavaFX。目录一次只加载一层，过滤 `.git`、`.idea`、`target`、`.llm-comments`、当前数据库及其辅助文件，不跟随目录符号链接。文件符号链接的实际目标需要在工作区内。
 
+`FileTreeView` 使用标准 `TreeView`，展开目录时通过后台执行器加载直接子节点。点击箭头、双击目录及 Enter 均可展开或折叠；文件通过双击或 Enter 打开。筛选检查已加载节点并保留匹配节点的祖先，尚未加载的目录仍可展开。刷新重读根目录及展开中的目录，按路径复用节点以保留展开状态。加载结果同时校验工作区代次和节点请求序号。筛选与刷新遍历使用显式队列。
+
 `SourceView` 使用虚拟化 `ListView`，行高由每行 `Label`/`HBox` 的首选高度及 CSS 上下留白计算。字号、字体或样式变化会重新布局，空行也保留当前源码字体的行盒。行间距、行号槽和标记槽使用 `em` 随字号变化。该方式需要测量可见行，并估算未显示行的高度，换取中文及不同字形的自适应布局。
 
 `SourceLines` 保存 UTF-16 offset 与原始换行，支持中文、emoji、LF、CRLF、CR、空文件及末尾空行。点击和 Shift 选择形成连续行范围，复制保留范围内原始换行。超过 10,000 个 UTF-16 单元的单行限制显示长度，并提示可复制全文；截断不改变真实选区或复制内容。
+
+用户点击或使用键盘调整源码选区时，右侧切换到“全部评论”及新增评论编辑器。已有评论尚有修改时先确认放弃，取消会恢复该评论的选区；已经在写新评论时，调整选区会保留草稿。程序因查看评论或历史而高亮源码，不触发新增评论。
+
+`CommentRangeIndex` 按起始行构建平衡区间树，每个节点记录子树的最大结束行。查询返回覆盖该行的全部评论，空间随评论数增长，大范围不会展开成逐行数组。建树及查询的递归深度受平衡树高度限制，为 `O(log n)`。标记出现在整个评论范围内；多个评论共用一行时显示数量，点击后通过菜单选择具体评论。相同范围、包含和交叉范围使用各自的评论 ID 及版本链。
+
+窗口图标与页头使用同一张 PNG，窗口提供 16、32、48、64、128、256 像素尺寸供桌面环境选择。[图标生成记录](app-icon.md) 保存了原始提示词。
 
 `DesktopApplication` 在 JavaFX 线程处理界面状态，通过单个后台执行器读取文件、执行 diff 和数据库操作。任务运行期间禁用可能冲突的操作，回调校验请求序号，窗口退出后不再回写 UI。切换文件或工作区、切换评论、关闭窗口时检查未保存的正文及作者变更。
 
@@ -49,6 +57,20 @@ Linux Pango 兼容处理由 `scripts/prepare_desktop_javafx.py` 从固定版本�
 兼容类优先于依赖中的同名类加载，JVM 使用可执行 JAR 的 classpath 方式运行。输入文本中的变体选择符、ZWJ 和代理对保持原样。
 
 这部分使用 JavaFX 内部接口，与本文列出的版本一起验证。生成资源保留上游许可证、原始源码、修改后的源码及补丁说明；升级 JavaFX 时必须重新核对补丁和实际排版回归，不能只验证编译通过。
+
+## Linux 中文输入法
+
+`DesktopInputMethods` 在 JavaFX Toolkit 启动后、首个窗口创建前，通过 FFM 调用 `libX11.so.6` 的 `XSetLocaleModifiers("")`，让 Xlib 采用已有的 `XMODIFIERS`。JavaFX Glass 21 的 [Linux 输入法实现](https://github.com/openjdk/jfx21u/blob/master/modules/javafx.graphics/src/main/native-glass/gtk/glass_window_ime.cpp) 直接打开 XIM，设置 `GTK_IM_MODULE` 本身不足以完成 Xlib 的初始化。调用约定见 [Xlib 文档](https://xorg.freedesktop.org/archive/current/doc/libX11/libX11/libX11.html)。Native Image 元数据另注册 `void* (void*)` downcall 签名。
+
+初始化使用当前进程的输入法环境。失败时向标准错误输出原因，窗口仍可用于浏览。`TextArea` 使用 JavaFX 的 `InputMethodEvent` 接收组合和提交文本。独立检查会打开临时窗口，用 JavaFX Robot 发送 `nihao` 和空格，同时断言编辑器内容与输入法提交事件都为“你好”：
+
+```sh
+# 需要已运行的 fcitx5，并将当前输入法设为拼音
+comment-desktop/target/llm-comment-desktop --ime-test 1
+comment-desktop/target/llm-comment-desktop --ime-test 1.75
+```
+
+该检查会激活测试窗口的 fcitx5 输入上下文；窗口失去焦点时停止发送按键。它需要桌面输入法服务，因此独立于可在 Xvfb 上运行的常规界面测试。
 
 ## Google 官方 Material 与 JavaFX
 
@@ -120,7 +142,7 @@ GluonFX 旧链接器不能直接识别 GraalVM 25 的静态库布局，因此本
 
 ## 验证与限制
 
-2026-10-25 在 Linux x64、Oracle GraalVM 25.0.2 上完成 78 项 JUnit 测试、JVM 界面测试及 CLI、MCP、桌面端的 `-O3` 构建与运行检查。CLI/MCP 共用数据库检查通过。桌面验证包含 Unicode 渲染、换行、光标命中、自适应行高和评论完整流程。清除 `JAVA_HOME`、`GRAALVM_HOME`、`JDK_HOME` 并将 `PATH` 指向不存在的目录后，普通窗口 100% 及 4K 最大化 175% 均通过检查。动态依赖为系统图形及 C/C++ 库，不依赖 `libjvm`。
+2026-10-25 在 Linux x64、Oracle GraalVM 25.0.2 上完成 81 项 JUnit 测试，以及 JVM 和桌面端 `-O3` 产物的界面检查。CLI、MCP 的 `-O3` 构建及共用数据库检查已在此前完成。桌面验证包含目录树、选行切换、重叠评论、Unicode 渲染、换行、光标命中、自适应行高和评论完整流程。清除 `JAVA_HOME`、`GRAALVM_HOME`、`JDK_HOME` 并将 `PATH` 指向不存在的目录后，4K 最大化 175% 布局通过检查。动态依赖为系统图形及 C/C++ 库，不依赖 `libjvm`。
 
 下图来自该 `-O3` 产物的临时工作区测试：
 
@@ -132,4 +154,8 @@ Unicode 回归覆盖 UTF-8 BOM、非法 UTF-8、简繁体、`𠮷/𠀀/龘`、�
 
 行高回归通过控件切换 16px、24px、16px 字号，并加大、恢复 CSS 上下留白。检查文字行、空行和 emoji 行的高度随样式变化，文字和行盒均能完整容纳，选区原文及行号保持一致。
 
-当前尚未实现语法高亮、自动文件监听、跨文件重命名跟踪或安装包。中文显示、程序化输入、4K 自动缩放与最大化有测试，实际中文输入法组合输入、不同 DPI 的显示器之间移动窗口及 Windows/macOS 原生构建仍需在对应环境验证。
+目录树检查覆盖逐层加载、Enter 展开和打开文件、筛选、刷新保留状态及过期异步结果。选区检查发送控件鼠标事件，验证查看评论后自动新增、连续 Shift 选择、同一行重新选择、重叠标记菜单、取消放弃修改后恢复选区。core 回归验证交叉、包含、完全相同和共用端点的范围在中文/emoji/CRLF 文件修改后同步移动，修改或删除一条评论时，其余评论的正文及历史保持独立。
+
+fcitx5 拼音检查通过系统按键输入 `nihao` 并选词，JVM 175% 以及 `-O3` 原生版 100% 和 175% 均收到“你好”提交事件。该结果覆盖本机 X11/fcitx5 环境；候选窗口是否跟随光标、其他输入法及显示协议仍需单独验证。
+
+当前尚未实现语法高亮、自动文件监听、跨文件重命名跟踪或安装包。不同 DPI 的显示器之间移动窗口及 Windows/macOS 原生构建仍需在对应环境验证。
