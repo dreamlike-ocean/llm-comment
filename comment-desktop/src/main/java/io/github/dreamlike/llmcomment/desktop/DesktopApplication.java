@@ -28,9 +28,8 @@ import javafx.stage.Screen;
 import javafx.stage.Stage;
 
 /** 文件及数据库操作在单个后台队列中执行，界面显示同一快照中的源码和评论。 */
-public final class DesktopApplication extends Application {
+public class DesktopApplication extends Application {
   static DesktopOptions options;
-  static volatile int exitCode;
   final BooleanProperty busy = new SimpleBooleanProperty();
   final SourceView source = new SourceView();
   final FileTreeView files = new FileTreeView(this::loadDirectory, this::openFile);
@@ -141,6 +140,7 @@ public final class DesktopApplication extends Application {
     stage.setMinWidth(1050);
     stage.setMinHeight(720);
     stage.setScene(scene);
+    DesktopInputMethods.install(scene);
     stage.xProperty().addListener((o, before, after) -> updateScale());
     stage.yProperty().addListener((o, before, after) -> updateScale());
     stage.widthProperty().addListener((o, before, after) -> updateScale());
@@ -158,12 +158,13 @@ public final class DesktopApplication extends Application {
     stage.setMaximized(options.maximized());
     stage.show();
     bindActions();
-    if (options.smoke()) {
-      DesktopSmoke.start(this, options.screenshot());
-    } else {
-      openWorkspace(
-          Workspace.resolve(Path.of("."), options.workspace(), options.database()), options.file());
-    }
+    openInitialWorkspace();
+  }
+
+  /** 窗口与动作初始化完成后打开工作区，子类可选择自己的启动内容。 */
+  protected void openInitialWorkspace() throws Exception {
+    openWorkspace(
+        Workspace.resolve(Path.of("."), options.workspace(), options.database()), options.file());
   }
 
   private Node header() {
@@ -801,11 +802,7 @@ public final class DesktopApplication extends Application {
         });
   }
 
-  private void report(Exception error) {
-    if (options.smoke() && !(error instanceof CommentException)) {
-      exitCode = 1;
-      error.printStackTrace(System.err);
-    }
+  protected void report(Exception error) {
     status.getStyleClass().add("error-text");
     String message = error.getMessage();
     if (error instanceof CommentException exception) {

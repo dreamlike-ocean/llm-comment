@@ -60,14 +60,14 @@ comment-desktop/target/llm-comment-desktop \
 
 桌面端沿用 CLI 的工作区发现规则，也接受 `--database PATH`。界面中可切换工作区；通过“打开工作区”选择的目录使用默认数据库。启动参数均可省略。
 
-- 左侧使用目录树，点击箭头、双击或 Enter 展开目录；双击或 Enter 打开文件。按中英文名称筛选已加载节点，刷新保留展开状态。
+- 左侧使用目录树，点击箭头、双击或 Enter 展开目录；双击或 Enter 打开文件。按中英文名称筛选已加载节点，刷新保留展开状态。文件类型图标按文件名和扩展名匹配，目录图标随展开状态变化。
 - 中间显示只读源码、行号、选区和评论标记。点击选行，Shift 选择范围，Ctrl/Cmd+C 复制原文。重叠评论在覆盖的每一行显示数量，点击标记选择评论。
 - 右侧创建、修改、删除评论；每次修改形成历史节点。查看已有评论后重新选行，会自动切换到新增评论；有未保存修改时先确认。历史页同时展示当时的正文与源码。
 - “刷新”同步外部代码修改和其他进程的评论。源码已变化的新增选区、已过时的正文版本会提示冲突，并保留草稿。
 - 支持浅色、深色主题，Ctrl/Cmd+R 刷新，Ctrl/Cmd+Enter 保存。
 - 自动适配高 DPI 屏幕；右上角可选择 75%～300% 缩放，Ctrl/Cmd+加号、减号调整，Ctrl/Cmd+0 恢复自动。窗口变宽时主要扩展源码区域。
 - 随应用提供中文、生僻字及 emoji 回退字体；Linux 使用单色 emoji。UTF-8 文件保留原字符、BOM 与换行；非法 UTF-8 会报告编码错误，保留已存快照。
-- Linux 启动时按现有 `XMODIFIERS` 初始化 XIM，接收系统输入法的中文提交。应用图标使用生成的代码行与评论气泡图案，见[图标及生成提示词](docs/app-icon.md)。
+- 各平台通过 JavaFX 公开接口将候选锚点设在输入框下沿；Linux 适配器向 XIM 补充上报该位置。应用图标使用生成的代码行与评论气泡图案，见[图标及生成提示词](docs/app-icon.md)。
 
 需要指定界面大小或直接最大化时：
 
@@ -79,14 +79,17 @@ comment-desktop/target/llm-comment-desktop --scale 150% --maximized
 
 核心 API、CLI、MCP 和桌面端可以共用同一 SQLite 数据库。桌面端不提供源码编辑、跨文件重命名跟踪或语法高亮；文件变化通过手动刷新或评论操作同步。
 
-界面测试在临时目录中执行，可单独运行并保存截图：
+界面检查位于 `comment-desktop/checks/`，编译到测试目录，发布 JAR 和可执行文件不包含检查代码。完成构建后，可用独立脚本在临时工作区运行并保存截图：
 
 ```sh
-comment-desktop/target/llm-comment-desktop \
-  --smoke-test --screenshot /tmp/llm-comment-desktop.png
+python3 scripts/check_desktop.py --smoke-test --screenshot /tmp/llm-comment-desktop.png
+# native-release verify 会另行构建独立检查程序
+python3 scripts/check_desktop.py --native --smoke-test
 ```
 
 原生程序运行时无需 JDK，仍依赖 GTK3、X11、OpenGL、Fontconfig 和可写临时目录。中文及 emoji 回退字体嵌入产物，其他文字继续使用系统字体。构建固定使用 Gluon JavaFX 静态 SDK 与 Substrate 元数据，无需 Gluon 账户。发布时需保留 `comment-desktop/target/desktop-native/licenses`。具体版本、兼容处理及验证范围见[桌面端设计与构建](docs/desktop-ui.md)。
+
+检查入口见[桌面检查工具](docs/desktop-checks.md)，十万及百万行的滚动测量见[桌面性能报告](docs/desktop-performance.md)。
 
 ## CLI
 

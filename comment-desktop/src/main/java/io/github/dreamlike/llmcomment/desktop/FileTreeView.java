@@ -4,11 +4,14 @@ import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javafx.application.Platform;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.WeakChangeListener;
 import javafx.scene.control.TreeCell;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.MouseButton;
+import javafx.scene.layout.Region;
 
 /** 目录仅在展开时异步读取一层；筛选只检查已经加载的节点。 */
 final class FileTreeView extends TreeView<WorkspaceModel.Entry> {
@@ -23,17 +26,7 @@ final class FileTreeView extends TreeView<WorkspaceModel.Entry> {
     this.openFile = Objects.requireNonNull(openFile);
     getStyleClass().add("file-tree");
     setShowRoot(false);
-    setCellFactory(
-        ignored ->
-            new TreeCell<>() {
-              @Override
-              protected void updateItem(WorkspaceModel.Entry entry, boolean empty) {
-                super.updateItem(entry, empty);
-                setText(
-                    empty || entry == null ? null : (entry.directory() ? "▣ " : "") + entry.name());
-                setGraphic(null);
-              }
-            });
+    setCellFactory(ignored -> new FileCell());
     setOnMouseClicked(
         event -> {
           if (event.getButton() == MouseButton.PRIMARY && event.getClickCount() == 2) {
@@ -50,6 +43,56 @@ final class FileTreeView extends TreeView<WorkspaceModel.Entry> {
             event.consume();
           }
         });
+  }
+
+  /** 虚拟单元格换行时解除旧分支监听，图形节点由各单元格独占。 */
+  private static final class FileCell extends TreeCell<WorkspaceModel.Entry> {
+    private TreeItem<WorkspaceModel.Entry> observed;
+    private final ChangeListener<Boolean> expansion = (value, before, after) -> updateGraphic();
+    private final WeakChangeListener<Boolean> weakExpansion = new WeakChangeListener<>(expansion);
+
+    private FileCell() {
+      treeItemProperty()
+          .addListener(
+              (value, before, after) -> {
+                if (observed != null) observed.expandedProperty().removeListener(weakExpansion);
+                observed = after;
+                if (observed != null) observed.expandedProperty().addListener(weakExpansion);
+                updateGraphic();
+              });
+    }
+
+    @Override
+    protected void updateItem(WorkspaceModel.Entry entry, boolean empty) {
+      super.updateItem(entry, empty);
+      setText(empty || entry == null ? null : entry.name());
+      updateGraphic();
+    }
+
+    private void updateGraphic() {
+      if (getGraphic() instanceof Region old) {
+        old.prefWidthProperty().unbind();
+        old.prefHeightProperty().unbind();
+      }
+      WorkspaceModel.Entry entry = getItem();
+      if (isEmpty() || entry == null) {
+        setGraphic(null);
+        return;
+      }
+      FileTypeIcons.Kind kind =
+          entry.directory()
+              ? observed != null && observed.isExpanded()
+                  ? FileTypeIcons.Kind.FOLDER_OPEN
+                  : FileTypeIcons.Kind.FOLDER
+              : FileTypeIcons.kind(entry.name());
+      Region icon = FileTypeIcons.create(kind);
+      icon.prefWidthProperty()
+          .bind(
+              javafx.beans.binding.Bindings.createDoubleBinding(
+                  () -> getFont().getSize() * 1.15, fontProperty()));
+      icon.prefHeightProperty().bind(icon.prefWidthProperty());
+      setGraphic(icon);
+    }
   }
 
   /** 新工作区使用全新根节点，旧工作区的异步结果无法写回。 */

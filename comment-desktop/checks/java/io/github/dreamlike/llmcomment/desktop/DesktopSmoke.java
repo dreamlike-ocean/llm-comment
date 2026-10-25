@@ -153,6 +153,7 @@ final class DesktopSmoke {
                       var codeLabel = (javafx.scene.control.Label) app.source.lookup(".code-text");
                       require(codeLabel != null, "源码字形测试未找到可见行");
                       FileTreeCheck.verify();
+                      InputMethodPlacementCheck.verify();
                       require(
                           app.stage.getIcons().size() >= 3
                               && app.stage.getIcons().stream()
@@ -251,12 +252,12 @@ final class DesktopSmoke {
                         return null;
                       });
                 }
-                require(DesktopApplication.exitCode == 0, "界面运行期间发生异常");
+                require(DesktopCheckMain.exitCode == 0, "界面运行期间发生异常");
                 System.out.println(
                     "Desktop smoke passed: workspace, Chinese/CRLF/emoji, range, relocation,"
                         + " history, conflict, deletion.");
               } catch (Throwable error) {
-                DesktopApplication.exitCode = 1;
+                DesktopCheckMain.exitCode = 1;
                 error.printStackTrace(System.err);
               } finally {
                 Platform.runLater(Platform::exit);

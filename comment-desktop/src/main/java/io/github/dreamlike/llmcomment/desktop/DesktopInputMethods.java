@@ -12,6 +12,11 @@ import javafx.application.Platform;
 final class DesktopInputMethods {
   private DesktopInputMethods() {}
 
+  static void install(javafx.scene.Scene scene) {
+    InputMethodPlacement.install(scene);
+    LinuxImePosition.install(scene);
+  }
+
   /** 必须在 Toolkit 启动后、首个窗口创建前调用；不修改环境变量或系统输入法设置。 */
   static void initialize() {
     if (!System.getProperty("os.name", "").startsWith("Linux")) return;

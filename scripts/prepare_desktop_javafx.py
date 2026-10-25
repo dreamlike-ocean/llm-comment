@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""生成固定 OpenJFX 21.0.8 的 Pango 字形兼容补丁及完整来源材料。"""
+"""生成固定 OpenJFX 21.0.8 的字形补丁、虚拟列表兼容源码及来源材料。"""
 import argparse
 import hashlib
 import io
@@ -18,6 +18,9 @@ LICENSES = {
     "ASSEMBLY_EXCEPTION": "a44eb7b5caf5534c6ef536b21edb40b4d6babf91bf97d9d45596868618b2c6fb",
 }
 SOURCE_PATH = "com/sun/javafx/font/freetype/PangoGlyphLayout.java"
+CONTROLS_URL = "https://repo.maven.apache.org/maven2/org/openjfx/javafx-controls/21.0.8/javafx-controls-21.0.8-sources.jar"
+CONTROLS_SHA = "d21fecd570ed72c9a4321fda3ba7dd7daff9e7379402a6d749a5eba17b81abf8"
+VIRTUAL_FLOW_PATH = "javafx/scene/control/skin/VirtualFlow.java"
 
 
 def sha256(data):
@@ -125,12 +128,19 @@ def prepare(source_output, resource_output):
     with zipfile.ZipFile(io.BytesIO(jar)) as archive:
         original = archive.read(SOURCE_PATH)
     revised = patch(original.decode("utf-8")).encode("utf-8")
+    controls = download(cache, "javafx-controls-21.0.8-sources.jar", CONTROLS_URL, CONTROLS_SHA)
+    with zipfile.ZipFile(io.BytesIO(controls)) as archive:
+        virtual_flow = archive.read(VIRTUAL_FLOW_PATH)
     licenses = {name: download(cache, name, LICENSE_BASE + name, checksum)
                 for name, checksum in LICENSES.items()}
     root = resource_output / "io/github/dreamlike/llmcomment/desktop/javafx-compat"
     atomic_write(source_output / SOURCE_PATH, revised)
     atomic_write(root / "original" / SOURCE_PATH, original)
     atomic_write(root / "modified" / SOURCE_PATH, revised)
+    # 两种产物编译同一份上游源码，静态 SDK 的旧列表实现会逐单元重扫行高缓存。
+    atomic_write(source_output / VIRTUAL_FLOW_PATH, virtual_flow)
+    atomic_write(root / "original" / VIRTUAL_FLOW_PATH, virtual_flow)
+    atomic_write(root / "compiled" / VIRTUAL_FLOW_PATH, virtual_flow)
     for name, data in licenses.items():
         atomic_write(root / name, data)
     provenance = (
@@ -141,6 +151,14 @@ def prepare(source_output, resource_output):
         "字符、字形顺序、宽度及输入正文保持不变。\n\n"
         f"{SOURCE_URL}\nSHA-256: {SOURCE_SHA}\nJAR 成员: {SOURCE_PATH}\n"
         f"原文 SHA-256: {sha256(original)}\n修订 SHA-256: {sha256(revised)}\n\n"
+    )
+    provenance += (
+        "OpenJFX 21.0.8 VirtualFlow 上游源码，原样编译，保留原始版权文件头。\n"
+        "JVM 与原生共用该实现；替代 Gluon 21-ea+11.3 的旧实现。\n"
+        "旧实现的 resizeCell 每次重算总高度，updateCellSize 在行高未变时也重扫缓存；\n"
+        "21.0.8 的单元缓存更新在行高变化时重算，行高仍按控件字体与 CSS 测量。\n"
+        f"{CONTROLS_URL}\nSHA-256: {CONTROLS_SHA}\nJAR 成员: {VIRTUAL_FLOW_PATH}\n"
+        f"编译原文 SHA-256: {sha256(virtual_flow)}\n\n"
     )
     provenance += "\n\n".join(f"{LICENSE_BASE}{name}\nSHA-256: {checksum}"
                               for name, checksum in LICENSES.items()) + "\n"

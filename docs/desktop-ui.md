@@ -10,7 +10,11 @@
 
 `FileTreeView` 使用标准 `TreeView`，展开目录时通过后台执行器加载直接子节点。点击箭头、双击目录及 Enter 均可展开或折叠；文件通过双击或 Enter 打开。筛选检查已加载节点并保留匹配节点的祖先，尚未加载的目录仍可展开。刷新重读根目录及展开中的目录，按路径复用节点以保留展开状态。加载结果同时校验工作区代次和节点请求序号。筛选与刷新遍历使用显式队列。
 
+文件图标按完整文件名、扩展名、通用类型依次匹配，例如 `pom.xml` 使用 Maven 标记，其他 XML 使用尖括号。目录根据展开状态切换图形。`SVGPath` 绘制的矢量图标随单元格字号和场景缩放，颜色引用主题变量，详见[文件图标实现](file-icons.md)。
+
 `SourceView` 使用虚拟化 `ListView`，行高由每行 `Label`/`HBox` 的首选高度及 CSS 上下留白计算。字号、字体或样式变化会重新布局，空行也保留当前源码字体的行盒。行间距、行号槽和标记槽使用 `em` 随字号变化。该方式需要测量可见行，并估算未显示行的高度，换取中文及不同字形的自适应布局。
+
+JVM 与原生构建共用官方 OpenJFX 21.0.8 `VirtualFlow` 源码。Gluon 静态 SDK 内的旧实现会在调整每个单元时反复扫描行高缓存，百万行滚动因此退化；共用实现按行高缓存的实际变化重算。源码包固定 SHA-256，原始源码和许可证随构建保存，见[性能报告](desktop-performance.md)。
 
 `SourceLines` 保存 UTF-16 offset 与原始换行，支持中文、emoji、LF、CRLF、CR、空文件及末尾空行。点击和 Shift 选择形成连续行范围，复制保留范围内原始换行。超过 10,000 个 UTF-16 单元的单行限制显示长度，并提示可复制全文；截断不改变真实选区或复制内容。
 
@@ -64,13 +68,19 @@ Linux Pango 兼容处理由 `scripts/prepare_desktop_javafx.py` 从固定版本�
 
 初始化使用当前进程的输入法环境。失败时向标准错误输出原因，窗口仍可用于浏览。`TextArea` 使用 JavaFX 的 `InputMethodEvent` 接收组合和提交文本。独立检查会打开临时窗口，用 JavaFX Robot 发送 `nihao` 和空格，同时断言编辑器内容与输入法提交事件都为“你好”：
 
+各平台通过 `InputMethodPlacement` 包装 JavaFX 公开的 `InputMethodRequests`：`getTextLocation` 返回当前输入框底边左侧的 `localToScreen` 坐标，其余操作委托控件 skin。切换焦点时移除旧监听并恢复接口，skin 重新设置接口时重新包装。该规则跟随控件布局与场景缩放，没有特定屏幕尺寸或输入法型号的补偿值。
+
+Linux Glass 未查询该候选锚点，`LinuxImePosition` 消费同一接口并补充 XIM 上报：Glass Screen 将逻辑屏幕坐标转为物理像素，`XTranslateCoordinates` 转为客户窗口坐标，`XSetICValues` 设置 `XNSpotLocation`。输入框及窗口变化触发更新，同一轮事件中的更新合并执行。Windows/macOS 的 Glass 已有公开接口调用路径；这两个平台仍需实机验证，系统候选窗口的边距、外观及屏幕边缘避让由平台决定。
+
+当前 Glass 没有公开获取 XIC 的接口。适配器限定 Linux x64、Maven JavaFX `21.0.8+2` 和 Gluon SDK 内的 `21-internal+11.2-2024-03-05-115411` 两个精确运行时版本，通过 GDK 登记的 `glass_window_context` 验证窗口身份，再按已核对的 C++ 布局读取 XIC。未知版本会停用此适配并记录原因；升级 JavaFX 时需要重新检查本地布局、FFM 元数据及实际候选窗口。该处理没有修改系统输入法配置。
+
 ```sh
-# 需要已运行的 fcitx5，并将当前输入法设为拼音
-comment-desktop/target/llm-comment-desktop --ime-test 1
-comment-desktop/target/llm-comment-desktop --ime-test 1.75
+# 需要已运行的 fcitx5 拼音及 xwininfo
+python3 scripts/check_desktop.py --native --ime-test 1
+python3 scripts/check_desktop.py --native --ime-test 1.75 /tmp/ime-position.png
 ```
 
-该检查会激活测试窗口的 fcitx5 输入上下文；窗口失去焦点时停止发送按键。它需要桌面输入法服务，因此独立于可在 Xvfb 上运行的常规界面测试。
+该检查会激活测试窗口的 fcitx5 输入上下文，窗口失去焦点时停止发送按键。`xwininfo` 读取系统候选窗口的坐标和可见状态，分别检查正文、移动窗口、动态缩放及切换作者输入框后的摆放位置。可选截图来自临时测试窗口所在的屏幕区域，包含系统候选框。坐标断言目前要求 X11 输出比例为 1，应用缩放由 `ScaledPane` 提供。此检查需要桌面输入法服务，独立于可在 Xvfb 上运行的常规界面测试。
 
 ## Google 官方 Material 与 JavaFX
 
@@ -104,11 +114,11 @@ mvn -pl comment-desktop -am -Pnative-release verify
 comment-desktop/target/llm-comment-desktop
 ```
 
-启动参数为可选的 `--workspace PATH`、`--database PATH`、`--file FILE`、`--scale VALUE`、`--maximized` 和 `--help`。工作区发现规则与 CLI 相同。图形冒烟测试使用 `--smoke-test`，可附加 `--screenshot PATH`；测试数据全部在临时工作区中生成。
+启动参数为可选的 `--workspace PATH`、`--database PATH`、`--file FILE`、`--scale VALUE`、`--maximized` 和 `--help`。工作区发现规则与 CLI 相同。检查代码位于 `comment-desktop/checks/java`，编译到 `target/test-classes`。独立脚本 `scripts/check_desktop.py --smoke-test` 支持 `--screenshot PATH`，测试数据在临时工作区中生成。生产入口和发布产物均不包含这些检查，详见[检查工具说明](desktop-checks.md)。
 
 原生构建当前实现 Linux x64。需要 GraalVM JDK 25、Maven、Python 3、GCC、binutils 的 `objcopy`、`pkg-config`，以及 GTK3/X11/OpenGL 等开发库。脚本在 Debian/Ubuntu 缺少开发包时通过 `apt download`、`dpkg-deb -x` 解包到用户缓存，不需要 sudo。其他发行版需预装对应开发库。
 
-`verify` 阶段实际显示 JavaFX 窗口，需要可用的 `DISPLAY`；无图形会话的 CI 可在 Xvfb 中运行。仅编译使用 `package`，该命令不执行图形冒烟测试。`mvn verify` 的普通 JVM 测试不启动 GUI；JAR 的完整界面测试需要另行运行 `--smoke-test`。
+原生配置的 `package` 构建发布程序，`verify` 再构建独立的 `llm-comment-desktop-checks` 并运行界面检查。两者采用配置指定的同一优化级别，构建记录分别在 `target/desktop-native` 和 `target/desktop-native-checks`。界面检查需要 `DISPLAY`，无图形会话的 CI 可用 Xvfb。普通 `mvn verify` 执行 JUnit 并编译检查类，JVM 完整界面通过独立脚本运行。
 
 ## Native Image 兼容处理
 
@@ -156,6 +166,10 @@ Unicode 回归覆盖 UTF-8 BOM、非法 UTF-8、简繁体、`𠮷/𠀀/龘`、�
 
 目录树检查覆盖逐层加载、Enter 展开和打开文件、筛选、刷新保留状态及过期异步结果。选区检查发送控件鼠标事件，验证查看评论后自动新增、连续 Shift 选择、同一行重新选择、重叠标记菜单、取消放弃修改后恢复选区。core 回归验证交叉、包含、完全相同和共用端点的范围在中文/emoji/CRLF 文件修改后同步移动，修改或删除一条评论时，其余评论的正文及历史保持独立。
 
-fcitx5 拼音检查通过系统按键输入 `nihao` 并选词，JVM 175% 以及 `-O3` 原生版 100% 和 175% 均收到“你好”提交事件。该结果覆盖本机 X11/fcitx5 环境；候选窗口是否跟随光标、其他输入法及显示协议仍需单独验证。
+fcitx5 拼音检查通过系统按键输入 `nihao` 并选词，JVM 175% 以及 `-O3` 原生版 100% 和 175% 均在正文与作者框收到“你好”提交事件。候选窗口的实际坐标通过 `xwininfo` 检查，覆盖移动窗口、动态切换缩放及切换输入框，均位于当前输入框下方。[候选框截图](ime-position.png) 来自 `-O3` 原生检查。该结果覆盖本机 X11/fcitx5 环境，其他输入法及显示协议需在对应环境验证。
+
+10 万及 100 万行文件已分别测量普通和密集评论场景，详见[桌面滚动性能报告](desktop-performance.md)。可见行仍使用动态行高，评论提示文本在悬停时生成。
 
 当前尚未实现语法高亮、自动文件监听、跨文件重命名跟踪或安装包。不同 DPI 的显示器之间移动窗口及 Windows/macOS 原生构建仍需在对应环境验证。
+
+跨平台编译审核使用官方 JavaFX 21.0.8 的 Windows、macOS x64 和 macOS ARM64 graphics 构件，字体适配及输入法定位类均独立编译通过。相关公共类和 Fontconfig/Pango 类在这些构件中齐备，正常 Windows/macOS 渲染仍使用各自的 DirectWrite/CoreText 后端。这证明源码和 API 可编译，未验证这两个平台的窗口、字体及输入法运行效果。Maven 生成的可执行 JAR 携带构建平台的 JavaFX 原生库，需要分别在目标平台构建。

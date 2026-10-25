@@ -144,3 +144,11 @@
 .file-tree .tree-cell:filled:hover { -fx-background-color: -app-surface-variant; }
 .file-tree .tree-cell:filled:selected { -fx-background-color: -app-primary-container; }
 .file-tree .tree-cell > .tree-disclosure-node > .arrow { -fx-background-color: -app-primary; }
+
+/* 文件图标使用主题色和自行绘制的矢量路径，避免字体缺字及 native 图片解码依赖。 */
+.file-type-icon { -file-icon-color: -app-muted; }
+.file-icon-path { -fx-fill: transparent; -fx-stroke: -file-icon-color; -fx-stroke-width: 1.25; -fx-stroke-line-cap: round; -fx-stroke-line-join: round; }
+.file-icon-folder, .file-icon-folder_open, .file-icon-java, .file-icon-kotlin,
+.file-icon-maven, .file-icon-typescript, .file-icon-python, .file-icon-rust,
+.file-icon-go, .file-icon-javascript { -file-icon-color: -app-primary; }
+.file-tree .tree-cell { -fx-graphic-text-gap: 0.55em; }

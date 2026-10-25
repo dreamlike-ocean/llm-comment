@@ -122,6 +122,7 @@ def main():
     parser.add_argument("--module", type=Path, required=True)
     parser.add_argument("--java-home", type=Path, required=True)
     parser.add_argument("--optimization", choices=["-O0", "-O3"], required=True)
+    parser.add_argument("--checks", action="store_true", help="构建独立检查程序，不覆盖发布产物")
     args = parser.parse_args()
     if platform.system() != "Linux" or platform.machine() not in ["x86_64", "amd64"]:
         raise RuntimeError("桌面原生构建当前仅支持 Linux x64；其他平台请先使用 JVM JAR。")
@@ -135,7 +136,7 @@ def main():
     module = args.module.resolve()
     repository = module.parent
     target = module / "target"
-    work = target / "desktop-native"
+    work = target / ("desktop-native-checks" if args.checks else "desktop-native")
     work.mkdir(parents=True, exist_ok=True)
     cache = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "llm-comments/desktop-native-v1"
     cache.mkdir(parents=True, exist_ok=True)
@@ -180,9 +181,18 @@ def main():
     run(["gcc", "-c", "-fPIC", "-I" + str(java_home / "include"), "-I" + str(java_home / "include/linux"),
          module / "src/main/native/jni-version.c", "-o", work / "jni-version.o"])
     metadata(javafx_jars, substrate, work)
+    if args.checks:
+        reflection_file = work / "reflect-config.json"
+        reflection = json.loads(reflection_file.read_text())
+        reflection.append({"name": "io.github.dreamlike.llmcomment.desktop.DesktopCheckApplication",
+                           "allPublicConstructors": True})
+        reflection_file.write_text(json.dumps(reflection))
     dependencies = (target / "native-classpath.txt").read_text().strip().split(os.pathsep)
     dependencies = [path for path in dependencies if "/org/openjfx/" not in path]
-    classpath = os.pathsep.join(map(str, [target / "classes", *javafx_jars, substrate, *dependencies]))
+    application_classes = [target / "test-classes", target / "classes"] if args.checks else [target / "classes"]
+    if args.checks and not (target / "test-classes/io/github/dreamlike/llmcomment/desktop/DesktopCheckMain.class").is_file():
+        raise RuntimeError("独立检查类尚未编译，请先运行 Maven test-compile。")
+    classpath = os.pathsep.join(map(str, [*application_classes, *javafx_jars, substrate, *dependencies]))
     link = [str(work / "jni-version.o"), "-Wl,--whole-archive"]
     link += [str(work / f"lib{name}.a") for name in LIBRARIES]
     link += ["-Wl,--no-whole-archive", *flags, "-lstdc++", "-lm"]
@@ -194,9 +204,10 @@ def main():
         "-H:JNIConfigurationFiles=" + str(work / "jni-config.json"),
         "-H:ResourceConfigurationFiles=" + str(work / "resource-config.json"),
         "--native-compiler-path=" + str(repository / "scripts/desktop_native_gcc.py"),
-        "-cp", classpath, "-o", str(target / "llm-comment-desktop")]
+        "-cp", classpath, "-o", str(target / ("llm-comment-desktop-checks" if args.checks else "llm-comment-desktop"))]
     command += ["-H:NativeLinkerOption=" + option for option in link]
-    command += ["io.github.dreamlike.llmcomment.desktop.Main"]
+    command += ["io.github.dreamlike.llmcomment.desktop.DesktopCheckMain" if args.checks
+                else "io.github.dreamlike.llmcomment.desktop.Main"]
     # 构建报告保留完整选项、SDK校验值，发布构建可确认实际采用 -O3。
     (work / "build-recipe.json").write_text(json.dumps({"command": command, "sdkVersion": SDK_VERSION,
         "sdkSha256": SDK_SHA, "substrateVersion": SUBSTRATE_VERSION, "substrateSha256": SUBSTRATE_SHA}, indent=2))

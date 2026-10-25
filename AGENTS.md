@@ -40,6 +40,10 @@
 - 区分用户选行和程序高亮：用户重新选行进入新增评论，查看评论及历史时的高亮仍保留编辑状态。放弃已有修改需要确认，取消后恢复原评论选区；新评论草稿随 Shift 调整范围保留。
 - 评论范围允许交叉、包含、完全相同及共用端点。行标记显示所有覆盖该行的评论，并允许逐条选择。范围同步、修改和删除后，各评论的版本链仍独立。
 - Linux 在 Toolkit 启动后、首个窗口创建前初始化 XIM locale modifiers。输入法验证需要接收操作系统提交事件，不能用 `setText` 或粘贴代替；系统按键测试只能发送到已获得焦点的临时窗口。
+- 候选锚点由跨平台 `InputMethodRequests` 统一设在输入框下沿。Linux 适配器消费同一坐标，通过 Xlib 转换为客户窗口坐标。固定 Glass ABI 适配须校验精确运行时版本、架构及 GDK 窗口身份；升级依赖后重新核对 C++ 布局。候选框测试检查操作系统窗口的实际坐标，覆盖移动、缩放和切换输入框。
+- 文件类型图标使用文件名与扩展名映射及 JavaFX 矢量节点。图标尺寸随字号变化，每个虚拟单元格拥有自己的节点，复用时移除旧目录的展开监听。
+- 共享布局、交互及缩放规则使用 JavaFX 接口，系统字体或输入法差异封装到平台适配器。不得按本机分辨率、窗口管理器或输入法型号添加界面坐标补偿；平台的实际渲染和候选窗口需要分别验证。
+- 超长文件性能分别测 JVM 和原生程序。`VirtualFlow` 共用固定的官方 21.0.8 源码，保留动态行高；不能恢复固定像素行高来规避旧 SDK 的缓存扫描问题。性能报告标注数据规模、评论密度、耗时范围及内存。
 
 ## 构建与验证
 
@@ -47,11 +51,12 @@
 - `mvn -Pnative-test verify`：构建 `-O0` 原生程序，并执行原生集成检查。
 - `mvn -Pnative-release verify`：构建 `-O3` 发布程序，并执行原生集成检查。
 - 桌面原生构建当前支持 Linux x64，使用 Gluon 固定版本的 JavaFX 静态 SDK、Substrate 元数据和本地 JNI 兼容层，见 `comment-desktop/src/main/native/README.md`。需要 Python 3、GCC、objcopy、pkg-config 和 GTK3/X11 开发库；Debian/Ubuntu 缺少开发包时允许下载解包到用户缓存，不修改系统或 JDK。
-- 桌面原生 `verify` 会实际打开窗口，需要 `DISPLAY`；无图形环境可通过 Xvfb 执行验证。仅构建使用 `package`，不能将其报告为通过界面测试。只构建无头模块时加 `-pl comment-cli,comment-mcp -am`。
+- 桌面原生 `verify` 另行构建 `llm-comment-desktop-checks` 并实际打开窗口，需要 `DISPLAY`；无图形环境可通过 Xvfb 执行验证。`package` 构建正式产物，不能将其报告为通过界面测试。只构建无头模块时加 `-pl comment-cli,comment-mcp -am`。
 - 第三方下载文件固定 SHA-256，发布桌面程序时保留 `target/desktop-native/licenses`；不要擅自替项目选定根许可证。
 - Native Image 使用 `--no-fallback`。SQLite JDBC 的平台 JNI 库嵌入可执行文件，启动时解压加载。
 - 优先使用 Xerial SQLite JDBC；仅在已证实不支持目标场景时考虑 SQLite C API 与 FFM。
-- 定位、历史不可变性、事务冲突和 CLI/MCP 协议需要有行为测试。覆盖中文、CRLF、插入/删除/替换、文件缺失及恢复、重复文本等情况。桌面 `--smoke-test` 使用临时工作区验证完整界面流程，不操作用户工作区。
+- 定位、历史不可变性、事务冲突和 CLI/MCP 协议需要有行为测试。覆盖中文、CRLF、插入/删除/替换、文件缺失及恢复、重复文本等情况。
+- 桌面检查源码位于 `comment-desktop/checks/java`，Maven 以测试源码编译；生产入口和产物不包含检查类或诊断参数。通过 `scripts/check_desktop.py` 运行 JVM 或独立原生检查程序，使用临时工作区。迁移检查代码后做 clean 构建，并检查发布 JAR 没有旧 class 残留。
 
 ## 实现与协作
 

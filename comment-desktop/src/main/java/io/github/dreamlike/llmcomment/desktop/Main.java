@@ -1,7 +1,6 @@
 package io.github.dreamlike.llmcomment.desktop;
 
 import javafx.application.Application;
-import javafx.application.Platform;
 
 /** 单独的启动类也允许通过普通 classpath 或可执行 JAR 启动 JavaFX。 */
 public final class Main {
@@ -9,10 +8,6 @@ public final class Main {
 
   public static void main(String[] args) {
     try {
-      if (args.length > 0 && args[0].equals("--ime-test")) {
-        ImeCheck.main(java.util.Arrays.copyOfRange(args, 1, args.length));
-        return;
-      }
       DesktopOptions options = DesktopOptions.parse(args);
       if (options.help()) {
         System.out.println(
@@ -24,17 +19,7 @@ public final class Main {
         return;
       }
       DesktopApplication.options = options;
-      if (options.smoke()) {
-        // JavaFX 会把 pulse/事件中的异常交给线程处理器，不能让冒烟测试静默通过。
-        Thread.setDefaultUncaughtExceptionHandler(
-            (thread, error) -> {
-              DesktopApplication.exitCode = 1;
-              error.printStackTrace(System.err);
-              Platform.exit();
-            });
-      }
       Application.launch(DesktopApplication.class, args);
-      if (DesktopApplication.exitCode != 0) System.exit(DesktopApplication.exitCode);
     } catch (Exception e) {
       System.err.println("桌面端启动失败：" + e.getMessage());
       if (DesktopApplication.options != null) e.printStackTrace(System.err);

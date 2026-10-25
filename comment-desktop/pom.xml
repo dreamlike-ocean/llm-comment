@@ -57,7 +57,11 @@
         <groupId>org.codehaus.mojo</groupId><artifactId>build-helper-maven-plugin</artifactId><version>3.6.1</version>
         <executions><execution><id>desktop-javafx-source</id><phase>generate-sources</phase><goals><goal>add-source</goal></goals>
           <configuration><sources><source>${project.build.directory}/generated-sources/desktop-javafx</source></sources></configuration>
-        </execution></executions>
+        </execution>
+          <execution><id>desktop-check-source</id><phase>generate-test-sources</phase><goals><goal>add-test-source</goal></goals>
+            <configuration><sources><source>${project.basedir}/checks/java</source></sources></configuration>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -74,6 +78,9 @@
               </excludes></filter>
                 <filter><artifact>org.openjfx:javafx-graphics</artifact><excludes>
                   <exclude>com/sun/javafx/font/freetype/PangoGlyphLayout.class</exclude>
+                </excludes></filter>
+                <filter><artifact>org.openjfx:javafx-controls</artifact><excludes>
+                  <exclude>javafx/scene/control/skin/VirtualFlow*.class</exclude>
                 </excludes></filter>
               </filters>
               <transformers>
@@ -110,8 +117,17 @@
                 <argument>--optimization=${native.optimization}</argument>
               </arguments></configuration>
             </execution>
+            <execution><id>desktop-native-check-build</id><phase>verify</phase><goals><goal>exec</goal></goals>
+              <configuration><executable>python3</executable><arguments>
+                <argument>${project.basedir}/../scripts/build_desktop_native.py</argument>
+                <argument>--module</argument><argument>${project.basedir}</argument>
+                <argument>--java-home</argument><argument>${java.home}</argument>
+                <argument>--optimization=${native.optimization}</argument>
+                <argument>--checks</argument>
+              </arguments></configuration>
+            </execution>
             <execution><id>desktop-native-smoke</id><phase>verify</phase><goals><goal>exec</goal></goals>
-              <configuration><executable>${project.build.directory}/llm-comment-desktop</executable>
+              <configuration><executable>${project.build.directory}/llm-comment-desktop-checks</executable>
                 <arguments><argument>--smoke-test</argument></arguments><timeout>60000</timeout>
               </configuration>
             </execution>
@@ -139,8 +155,17 @@
                 <argument>--optimization=${native.optimization}</argument>
               </arguments></configuration>
             </execution>
+            <execution><id>desktop-native-check-build</id><phase>verify</phase><goals><goal>exec</goal></goals>
+              <configuration><executable>python3</executable><arguments>
+                <argument>${project.basedir}/../scripts/build_desktop_native.py</argument>
+                <argument>--module</argument><argument>${project.basedir}</argument>
+                <argument>--java-home</argument><argument>${java.home}</argument>
+                <argument>--optimization=${native.optimization}</argument>
+                <argument>--checks</argument>
+              </arguments></configuration>
+            </execution>
             <execution><id>desktop-native-smoke</id><phase>verify</phase><goals><goal>exec</goal></goals>
-              <configuration><executable>${project.build.directory}/llm-comment-desktop</executable>
+              <configuration><executable>${project.build.directory}/llm-comment-desktop-checks</executable>
                 <arguments><argument>--smoke-test</argument></arguments><timeout>60000</timeout>
               </configuration>
             </execution>

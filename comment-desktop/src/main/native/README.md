@@ -7,7 +7,7 @@ mvn -pl comment-desktop -am -Pnative-test verify
 mvn -pl comment-desktop -am -Pnative-release verify
 ```
 
-两个配置分别实际传入 `-O0`、`-O3`，都使用 `--no-fallback`，并运行 `--smoke-test`。可执行文件为 `comment-desktop/target/llm-comment-desktop`。完整命令、固定 SDK 版本与 SHA-256 写入 `target/desktop-native/build-recipe.json`。SQLite JDBC 自带的 Native Image Feature 继续负责嵌入平台 JNI 库。
+两个配置分别实际传入 `-O0`、`-O3`，都使用 `--no-fallback`。`package` 构建发布程序 `target/llm-comment-desktop`；`verify` 另外构建同优化级别的 `target/llm-comment-desktop-checks` 并运行 smoke，检查代码来自 `checks/java`，不进入正式产物。完整命令、SDK 版本与 SHA-256 分别写入 `target/desktop-native/build-recipe.json` 和 `target/desktop-native-checks/build-recipe.json`。SQLite JDBC 自带的 Native Image Feature 负责嵌入平台 JNI 库。
 
 构建脚本下载固定版本的 Gluon JavaFX 静态 SDK `21-ea+11.3` 和 Substrate `0.0.69`，复用其 JNI、反射及资源配置。运行时与静态库采用 SDK 中同一版本的 JavaFX 类；Maven 的 JavaFX 21.0.8 仅用于编译及 JVM 运行。下载缓存位于 `${XDG_CACHE_HOME:-$HOME/.cache}/llm-comments/desktop-native-v1`，不会改写 JDK。缺少开发库时，在 Debian/Ubuntu 上通过 `apt download` 和 `dpkg-deb -x` 解到用户缓存，不执行系统安装；其他系统需要预先安装脚本报出的开发包。
 
@@ -22,6 +22,10 @@ GluonFX 的旧链接器不能识别 GraalVM 25 的静态库目录，因此脚本
 
 `prepare_desktop_javafx.py` 生成修订过的 OpenJFX 21.0.8 `PangoGlyphLayout`，修正不可见字形、补充平面字符的 UTF-16 索引及换行拆分后的 UTF-8 缓存。应用 classes 放在 JavaFX JAR 前，因此 JVM 和 Native Image 使用相同修补。字体许可证和排版兼容源码分别保留在发布目录的 `licenses/fonts` 与 `licenses/javafx-compat`。升级 JavaFX 后须重新验证字形光栅、完整混排及光标命中。
 
-`DesktopInputMethods` 在首个窗口创建前，通过 FFM 调用系统 Xlib 的 `XSetLocaleModifiers("")`，按现有 `XMODIFIERS` 初始化 Glass 使用的 XIM。对应 downcall 签名已注册到 Native Image 元数据。已运行 fcitx5 拼音的桌面会话可通过 `--ime-test 1` 或 `--ime-test 1.75` 检查实际中文输入；此检查发送系统按键，需要测试窗口持续获得焦点。
+同一脚本还原样编译官方 OpenJFX 21.0.8 `VirtualFlow` 及嵌套类，替换静态 SDK 中滚动时反复全量扫描行高缓存的旧实现。JVM 和原生共用这份源码，行高仍随字体及 CSS 变化。来源、SHA-256 和完整源码保存在 `licenses/javafx-compat`。
+
+`DesktopInputMethods` 在首个窗口创建前，通过 FFM 调用系统 Xlib 的 `XSetLocaleModifiers("")`，按现有 `XMODIFIERS` 初始化 Glass 使用的 XIM。对应 downcall 签名已注册到 Native Image 元数据。已有 fcitx5 拼音的桌面会话可通过 `python3 scripts/check_desktop.py --native --ime-test 1.75` 检查实际中文输入；此检查发送系统按键，需要测试窗口持续获得焦点。
+
+候选锚点通过跨平台公开 `InputMethodRequests` 设为输入框下沿，Linux 适配器读取同一坐标后向 XIM 上报。适配器校验精确 JavaFX 版本、Linux x64 及 GDK 窗口上下文后读取 Glass 的 XIC，使用 Xlib 可变参数调用设置 `XNSpotLocation`。FFM 元数据需要保留 `firstVariadicArg`。升级 SDK 时重新验证固定 C++ 布局，未知版本会停用位置适配。独立 IME 检查另需 `xwininfo`，应用正常运行不需要该命令。
 
 来源：[Gluon Substrate](https://github.com/gluonhq/substrate/tree/0.0.69)、[JNI 静态库调用规范](https://docs.oracle.com/en/java/javase/25/docs/specs/jni/invocation.html#support-for-statically-linked-libraries)。

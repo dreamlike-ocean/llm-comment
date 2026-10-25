@@ -175,11 +175,12 @@ public final class SourceView extends BorderPane {
 
   private static String commentLabel(CommentView comment) {
     var location = comment.location();
-    String body = comment.body().replace('\n', ' ').replace('\r', ' ');
-    if (body.length() > 100) {
-      int end = Character.isHighSurrogate(body.charAt(99)) ? 99 : 100;
-      body = body.substring(0, end) + "…";
-    }
+    String fullBody = comment.body();
+    int end = Math.min(100, fullBody.length());
+    if (end < fullBody.length() && Character.isHighSurrogate(fullBody.charAt(end - 1))) end--;
+    // 只处理展示前缀；大正文不能在每次滚动、菜单或悬停时被完整扫描。
+    String body = fullBody.substring(0, end).replace('\n', ' ').replace('\r', ' ');
+    if (end < fullBody.length()) body += "…";
     return (comment.deleted() ? "[已删除] " : "")
         + "第 "
         + location.startLine()
@@ -196,18 +197,29 @@ public final class SourceView extends BorderPane {
     private final Label marker = new Label();
     private final Label code = new Label();
     private final HBox row = new HBox(number, marker, code);
+    private final Tooltip markerTooltip = new Tooltip();
+    private List<CommentView> lineComments = List.of();
+    private SourceLines.Line renderedLine;
+    private CommentRangeIndex renderedMarkers;
 
     private SourceCell() {
       getStyleClass().add("source-line");
       number.getStyleClass().add("line-number");
       marker.getStyleClass().add("line-marker");
+      // 单元会反复测量及复用；未悬停时无需为所有覆盖评论创建说明文本。
+      markerTooltip.setOnShowing(
+          ignored ->
+              markerTooltip.setText(
+                  lineComments.stream()
+                      .map(SourceView::commentLabel)
+                      .collect(java.util.stream.Collectors.joining("\n"))));
       marker.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> event.consume());
       marker.addEventFilter(MouseEvent.MOUSE_RELEASED, event -> event.consume());
       marker.setOnMouseClicked(
           event -> {
             var line = getItem();
             if (line == null) return;
-            var comments = markers.at(line.number());
+            var comments = lineComments;
             if (comments.size() == 1) commentChosen.accept(comments.getFirst());
             else if (!comments.isEmpty()) {
               var menu = new ContextMenu();
@@ -233,11 +245,22 @@ public final class SourceView extends BorderPane {
       super.updateItem(line, empty);
       setText(null);
       if (empty || line == null) {
+        renderedLine = null;
+        renderedMarkers = null;
+        lineComments = List.of();
+        marker.setTooltip(null);
+        markerTooltip.setText("");
         setGraphic(null);
         return;
       }
+      // VirtualFlow 的尺寸探测可能再次提交同一行；CSS/字体布局由控件自行失效。
+      if (line == renderedLine && markers == renderedMarkers) return;
+      if (markerTooltip.isShowing()) markerTooltip.hide();
+      renderedLine = line;
+      renderedMarkers = markers;
       number.setText(Integer.toString(line.number()));
       var comments = markers.at(line.number());
+      lineComments = comments;
       boolean deleted = !comments.isEmpty() && comments.stream().allMatch(CommentView::deleted);
       marker.setText(
           comments.isEmpty()
@@ -247,13 +270,8 @@ public final class SourceView extends BorderPane {
                       ? "99+"
                       : comments.size() > 1 ? Integer.toString(comments.size()) : ""));
       marker.setOpacity(deleted ? 0.45 : 1);
-      marker.setTooltip(
-          comments.isEmpty()
-              ? null
-              : new Tooltip(
-                  comments.stream()
-                      .map(SourceView::commentLabel)
-                      .collect(java.util.stream.Collectors.joining("\n"))));
+      markerTooltip.setText("");
+      marker.setTooltip(comments.isEmpty() ? null : markerTooltip);
       String value = line.text();
       if (value.length() > DISPLAY_LIMIT) {
         int boundary = DISPLAY_LIMIT;

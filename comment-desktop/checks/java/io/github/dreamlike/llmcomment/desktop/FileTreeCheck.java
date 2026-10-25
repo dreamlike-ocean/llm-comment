@@ -11,6 +11,7 @@ final class FileTreeCheck {
 
   static void verify() {
     if (!Platform.isFxApplicationThread()) throw new IllegalStateException("目录树检查需要 JavaFX 线程");
+    verifyIcons();
     List<Request> requests = new ArrayList<>();
     List<String> opened = new ArrayList<>();
     FileTreeView tree =
@@ -54,6 +55,23 @@ final class FileTreeCheck {
     tree.activateSelected();
     require(opened.getLast().equals("new.java"), "切换工作区后文件仍可打开");
     System.out.println("目录树检查通过：逐层加载、目录展开、文件打开、筛选、刷新及过期结果隔离");
+  }
+
+  private static void verifyIcons() {
+    require(FileTypeIcons.kind("pom.xml") == FileTypeIcons.Kind.MAVEN, "精确文件名优先于 XML 扩展名");
+    require(FileTypeIcons.kind("Cargo.toml") == FileTypeIcons.Kind.RUST, "精确文件名不区分大小写");
+    require(FileTypeIcons.kind(".gitignore") == FileTypeIcons.Kind.GIT, "隐藏配置文件可识别");
+    require(FileTypeIcons.kind("Example.JAVA") == FileTypeIcons.Kind.JAVA, "扩展名不区分大小写");
+    require(FileTypeIcons.kind("中文.tsx") == FileTypeIcons.Kind.TYPESCRIPT, "中文文件名保留扩展名识别");
+    require(FileTypeIcons.kind("README") == FileTypeIcons.Kind.FILE, "无扩展名回退通用文件");
+    require(FileTypeIcons.kind("file.unknown") == FileTypeIcons.Kind.FILE, "未知扩展名回退通用文件");
+    for (FileTypeIcons.Kind kind : FileTypeIcons.Kind.values()) {
+      javafx.scene.layout.Region icon = FileTypeIcons.create(kind);
+      require(icon != FileTypeIcons.create(kind), "每次创建独立图形节点");
+      icon.resize(24, 24);
+      icon.layout();
+      require(icon.getChildrenUnmodifiable().size() == 1, "各类型必须有矢量图形");
+    }
   }
 
   private static WorkspaceModel.Entry directory(String path) {
