@@ -2,6 +2,22 @@
 
 本地代码评论工具，提供供 LLM 使用的 Java API、CLI、MCP stdio，以及 Material 风格的 JavaFX 桌面端。评论、评论历史和文件快照保存在 SQLite 中。源码按 UTF-8 读取，评论操作保持源码字节不变。工具独立于 Git 和 IDE。
 
+## 界面预览
+
+以下截图来自 Linux `-O3` 原生程序，在本仓库根目录运行 `comment-desktop/target/llm-comment-desktop`，使用本项目的源码和已有评论。
+
+展开目录树浏览源码，选中右侧评论后高亮完整范围。评论圆点显示在起始行。
+
+![浅色主题：目录树、源码范围高亮与评论编辑](docs/screenshots/source-comments.png)
+
+选择历史版本，同时查看当时的评论正文和源码快照。
+
+![修改历史：评论版本列表与对应的历史源码快照](docs/screenshots/comment-history.png)
+
+切换到深色主题后，目录、源码和评论使用同一套配色。
+
+![深色主题：源码浏览与行级评论](docs/screenshots/dark-theme.png)
+
 ## 构建与运行
 
 构建需要 Java 25 和 Maven；桌面模块的字体和 JavaFX 兼容资源准备需要 Python 3，首次构建会下载固定 SHA-256 的公开文件，后续复用用户缓存。构建 Native Image 时使用包含 `native-image` 的 GraalVM JDK 25，并准备平台所需的 C 工具链。原生集成检查使用 Python 3。
@@ -40,8 +56,6 @@ Native Image 使用 `--no-fallback`。SQLite JDBC 的平台 JNI 动态库以资�
 已验证的平台是 Linux x64。其他平台需要在目标平台构建并执行验证。
 
 ## 桌面端
-
-![JavaFX 原生桌面端截图](docs/desktop.png)
 
 ```sh
 # JVM 构建与启动
