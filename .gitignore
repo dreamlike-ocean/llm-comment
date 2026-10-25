@@ -1,0 +1,9 @@
+**/target/
+.llm-comments/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+.idea/
+*.iml
+__pycache__/

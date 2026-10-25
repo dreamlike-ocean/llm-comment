@@ -1,0 +1,1079 @@
+{
+  "environment": {
+    "platform": "Linux-7.3.0-6-generic-x86_64-with-glibc2.44",
+    "java": "java version \"25.0.2\" 2026-01-20 LTS\nJava(TM) SE Runtime Environment Oracle GraalVM 25.0.2+10.1 (build 25.0.2+10-LTS-jvmci-b01)\nJava HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.0.2+10.1 (build 25.0.2+10-LTS-jvmci-b01, mixed mode, sharing)\n",
+    "cpu_count": 20,
+    "processor": "",
+    "jar_sha256": "8f879ce593c790645f7f0c7bcb38a0f3ab88c9ac3f8167d34f35aa9d511adea3",
+    "probe_sha256": "d4089c6f15b483575928bd04e4c3696d5bab5ac70e914b59936d3025cedc2685"
+  },
+  "configuration": {
+    "jar": "/tmp/llm-comment-perf/baseline.jar",
+    "output": "/tmp/llm-comment-perf/chinese-storage-final.json.baseline.json",
+    "baseline_jar": null,
+    "warmup": 5,
+    "samples": 10,
+    "forks": 2,
+    "cases": [
+      "service-chinese-unchanged",
+      "service-chinese-changed",
+      "service-chinese-get"
+    ],
+    "java": "java",
+    "javac": "javac"
+  },
+  "measurement": "nanoTime 围绕单次 relocate/list/get；固定输入，大文件约 1MiB UTF-16、1000 评论均匀分布；single 用 100 行/1 评论；repeat 用 8192 相同行。预热不记录；输入构造、建库、写文件、校验不计时，setupNanos 单独记录。allocatedBytes 为当前线程分配量，不含其他线程/native；每 case/fork 新进程，-Xms128m -Xmx512m；wide 为同一文件中跨大跨度的多处编辑；p50/p95 对所有 fork 的测量样本合并后线性插值，非吞吐量。",
+  "results": {
+    "service-chinese-unchanged": {
+      "input": {
+        "previousUtf16Units": 1048576,
+        "previousUtf8Bytes": 3112960,
+        "currentUtf16Units": 1048584,
+        "currentUtf8Bytes": 3112980,
+        "commentCount": 1000
+      },
+      "p50_ms": 4328.177287500001,
+      "p95_ms": 4358.619891300001,
+      "mean_ms": 4330.86457565,
+      "allocated_bytes_p50": 14617502200.0,
+      "states": [
+        "{ACTIVE=1000}"
+      ],
+      "forks": [
+        {
+          "fork": 0,
+          "command": [
+            "java",
+            "-Xms128m",
+            "-Xmx512m",
+            "-cp",
+            "/tmp/comment-probe-9175_c04:/tmp/llm-comment-perf/baseline.jar",
+            "PerformanceProbe",
+            "service-chinese-unchanged",
+            "5",
+            "10"
+          ],
+          "samples": [
+            {
+              "setupNanos": 1026789098,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 0,
+              "nanos": 4310706291,
+              "allocatedBytes": 14617502440,
+              "checksum": -294895786956,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1026789098,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 1,
+              "nanos": 4327350018,
+              "allocatedBytes": 14617502200,
+              "checksum": -344045084782,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1026789098,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 2,
+              "nanos": 4296543287,
+              "allocatedBytes": 14617502200,
+              "checksum": -393194382608,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1026789098,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 3,
+              "nanos": 4302324573,
+              "allocatedBytes": 14617502200,
+              "checksum": -442343680434,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1026789098,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 4,
+              "nanos": 4311514663,
+              "allocatedBytes": 14617502200,
+              "checksum": -491492978260,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1026789098,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 5,
+              "nanos": 4325004702,
+              "allocatedBytes": 14617502200,
+              "checksum": -540642276086,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1026789098,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 6,
+              "nanos": 4337277452,
+              "allocatedBytes": 14617502200,
+              "checksum": -589791573912,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1026789098,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 7,
+              "nanos": 4315235843,
+              "allocatedBytes": 14617502200,
+              "checksum": -638940871738,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1026789098,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 8,
+              "nanos": 4310228281,
+              "allocatedBytes": 14617502200,
+              "checksum": -688090169564,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1026789098,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 9,
+              "nanos": 4345180524,
+              "allocatedBytes": 14617502200,
+              "checksum": -737239467390,
+              "states": "{ACTIVE=1000}"
+            }
+          ]
+        },
+        {
+          "fork": 1,
+          "command": [
+            "java",
+            "-Xms128m",
+            "-Xmx512m",
+            "-cp",
+            "/tmp/comment-probe-9175_c04:/tmp/llm-comment-perf/baseline.jar",
+            "PerformanceProbe",
+            "service-chinese-unchanged",
+            "5",
+            "10"
+          ],
+          "samples": [
+            {
+              "setupNanos": 1054179985,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 0,
+              "nanos": 4329004557,
+              "allocatedBytes": 14617502440,
+              "checksum": -294895786956,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1054179985,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 1,
+              "nanos": 4315180214,
+              "allocatedBytes": 14617502200,
+              "checksum": -344045084782,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1054179985,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 2,
+              "nanos": 4337129426,
+              "allocatedBytes": 14617502200,
+              "checksum": -393194382608,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1054179985,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 3,
+              "nanos": 4326408334,
+              "allocatedBytes": 14617502200,
+              "checksum": -442343680434,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1054179985,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 4,
+              "nanos": 4351530699,
+              "allocatedBytes": 14617502200,
+              "checksum": -491492978260,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1054179985,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 5,
+              "nanos": 4358118674,
+              "allocatedBytes": 14617502200,
+              "checksum": -540642276086,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1054179985,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 6,
+              "nanos": 4350679710,
+              "allocatedBytes": 14617502200,
+              "checksum": -589791573912,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1054179985,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 7,
+              "nanos": 4355337292,
+              "allocatedBytes": 14617502200,
+              "checksum": -638940871738,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1054179985,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 8,
+              "nanos": 4368143020,
+              "allocatedBytes": 14617502200,
+              "checksum": -688090169564,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1054179985,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 9,
+              "nanos": 4344393953,
+              "allocatedBytes": 14617502200,
+              "checksum": -737239467390,
+              "states": "{ACTIVE=1000}"
+            }
+          ]
+        }
+      ]
+    },
+    "service-chinese-changed": {
+      "input": {
+        "previousUtf16Units": 1048576,
+        "previousUtf8Bytes": 3112960,
+        "currentUtf16Units": 1048584,
+        "currentUtf8Bytes": 3112980,
+        "commentCount": 1000
+      },
+      "p50_ms": 4533.7575115,
+      "p95_ms": 4573.80931295,
+      "mean_ms": 4521.92065585,
+      "allocated_bytes_p50": 14625949764.0,
+      "states": [
+        "{ACTIVE=1000}"
+      ],
+      "forks": [
+        {
+          "fork": 0,
+          "command": [
+            "java",
+            "-Xms128m",
+            "-Xmx512m",
+            "-cp",
+            "/tmp/comment-probe-9175_c04:/tmp/llm-comment-perf/baseline.jar",
+            "PerformanceProbe",
+            "service-chinese-changed",
+            "5",
+            "10"
+          ],
+          "samples": [
+            {
+              "setupNanos": 1036097965,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 0,
+              "nanos": 4569254314,
+              "allocatedBytes": 14626010064,
+              "checksum": -294895786956,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036097965,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 1,
+              "nanos": 4538919391,
+              "allocatedBytes": 14625905672,
+              "checksum": -344045084782,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036097965,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 2,
+              "nanos": 4639221163,
+              "allocatedBytes": 14626009824,
+              "checksum": -393194382608,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036097965,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 3,
+              "nanos": 4546630647,
+              "allocatedBytes": 14625905672,
+              "checksum": -442343680434,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036097965,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 4,
+              "nanos": 4570366584,
+              "allocatedBytes": 14626009824,
+              "checksum": -491492978260,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036097965,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 5,
+              "nanos": 4481665058,
+              "allocatedBytes": 14625905672,
+              "checksum": -540642276086,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036097965,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 6,
+              "nanos": 4541341390,
+              "allocatedBytes": 14626009824,
+              "checksum": -589791573912,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036097965,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 7,
+              "nanos": 4448675665,
+              "allocatedBytes": 14625905672,
+              "checksum": -638940871738,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036097965,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 8,
+              "nanos": 4533116390,
+              "allocatedBytes": 14625993808,
+              "checksum": -688090169564,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036097965,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 9,
+              "nanos": 4491860923,
+              "allocatedBytes": 14625889656,
+              "checksum": -737239467390,
+              "states": "{ACTIVE=1000}"
+            }
+          ]
+        },
+        {
+          "fork": 1,
+          "command": [
+            "java",
+            "-Xms128m",
+            "-Xmx512m",
+            "-cp",
+            "/tmp/comment-probe-9175_c04:/tmp/llm-comment-perf/baseline.jar",
+            "PerformanceProbe",
+            "service-chinese-changed",
+            "5",
+            "10"
+          ],
+          "samples": [
+            {
+              "setupNanos": 1036449039,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 0,
+              "nanos": 4519777667,
+              "allocatedBytes": 14626010112,
+              "checksum": -294895786956,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036449039,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 1,
+              "nanos": 4448728319,
+              "allocatedBytes": 14625905720,
+              "checksum": -344045084782,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036449039,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 2,
+              "nanos": 4536148380,
+              "allocatedBytes": 14626009872,
+              "checksum": -393194382608,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036449039,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 3,
+              "nanos": 4498856849,
+              "allocatedBytes": 14625905720,
+              "checksum": -442343680434,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036449039,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 4,
+              "nanos": 4537877662,
+              "allocatedBytes": 14626009872,
+              "checksum": -491492978260,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036449039,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 5,
+              "nanos": 4487724764,
+              "allocatedBytes": 14625905720,
+              "checksum": -540642276086,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036449039,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 6,
+              "nanos": 4538135494,
+              "allocatedBytes": 14626009872,
+              "checksum": -589791573912,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036449039,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 7,
+              "nanos": 4493846935,
+              "allocatedBytes": 14625905720,
+              "checksum": -638940871738,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036449039,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 8,
+              "nanos": 4534398633,
+              "allocatedBytes": 14625993824,
+              "checksum": -688090169564,
+              "states": "{ACTIVE=1000}"
+            },
+            {
+              "setupNanos": 1036449039,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 9,
+              "nanos": 4481866889,
+              "allocatedBytes": 14625889672,
+              "checksum": -737239467390,
+              "states": "{ACTIVE=1000}"
+            }
+          ]
+        }
+      ]
+    },
+    "service-chinese-get": {
+      "input": {
+        "previousUtf16Units": 1048576,
+        "previousUtf8Bytes": 3112960,
+        "currentUtf16Units": 1048584,
+        "currentUtf8Bytes": 3112980,
+        "commentCount": 1000
+      },
+      "p50_ms": 19.7320085,
+      "p95_ms": 21.226089849999997,
+      "mean_ms": 19.82058545,
+      "allocated_bytes_p50": 64515736.0,
+      "states": [
+        "{ACTIVE=1}"
+      ],
+      "forks": [
+        {
+          "fork": 0,
+          "command": [
+            "java",
+            "-Xms128m",
+            "-Xmx512m",
+            "-cp",
+            "/tmp/comment-probe-9175_c04:/tmp/llm-comment-perf/baseline.jar",
+            "PerformanceProbe",
+            "service-chinese-get",
+            "5",
+            "10"
+          ],
+          "samples": [
+            {
+              "setupNanos": 1034825013,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 0,
+              "nanos": 19492366,
+              "allocatedBytes": 64515752,
+              "checksum": 439537134,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1034825013,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 1,
+              "nanos": 19682277,
+              "allocatedBytes": 64515752,
+              "checksum": 512793323,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1034825013,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 2,
+              "nanos": 19973496,
+              "allocatedBytes": 64515752,
+              "checksum": 586049512,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1034825013,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 3,
+              "nanos": 19988152,
+              "allocatedBytes": 64515752,
+              "checksum": 659305701,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1034825013,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 4,
+              "nanos": 20838425,
+              "allocatedBytes": 64515752,
+              "checksum": 732561890,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1034825013,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 5,
+              "nanos": 19496378,
+              "allocatedBytes": 64515752,
+              "checksum": 805818079,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1034825013,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 6,
+              "nanos": 19259867,
+              "allocatedBytes": 64515752,
+              "checksum": 879074268,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1034825013,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 7,
+              "nanos": 19069407,
+              "allocatedBytes": 64515752,
+              "checksum": 952330457,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1034825013,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 8,
+              "nanos": 19897454,
+              "allocatedBytes": 64515752,
+              "checksum": 1025586646,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1034825013,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 9,
+              "nanos": 18727968,
+              "allocatedBytes": 64515752,
+              "checksum": 1098842835,
+              "states": "{ACTIVE=1}"
+            }
+          ]
+        },
+        {
+          "fork": 1,
+          "command": [
+            "java",
+            "-Xms128m",
+            "-Xmx512m",
+            "-cp",
+            "/tmp/comment-probe-9175_c04:/tmp/llm-comment-perf/baseline.jar",
+            "PerformanceProbe",
+            "service-chinese-get",
+            "5",
+            "10"
+          ],
+          "samples": [
+            {
+              "setupNanos": 1040034066,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 0,
+              "nanos": 21274233,
+              "allocatedBytes": 64515720,
+              "checksum": 439537134,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1040034066,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 1,
+              "nanos": 19814816,
+              "allocatedBytes": 64515720,
+              "checksum": 512793323,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1040034066,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 2,
+              "nanos": 19781740,
+              "allocatedBytes": 64515720,
+              "checksum": 586049512,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1040034066,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 3,
+              "nanos": 19498910,
+              "allocatedBytes": 64515720,
+              "checksum": 659305701,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1040034066,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 4,
+              "nanos": 21223556,
+              "allocatedBytes": 64515720,
+              "checksum": 732561890,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1040034066,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 5,
+              "nanos": 20797213,
+              "allocatedBytes": 64515720,
+              "checksum": 805818079,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1040034066,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 6,
+              "nanos": 19051298,
+              "allocatedBytes": 64515720,
+              "checksum": 879074268,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1040034066,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 7,
+              "nanos": 20311568,
+              "allocatedBytes": 64515720,
+              "checksum": 952330457,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1040034066,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 8,
+              "nanos": 19153656,
+              "allocatedBytes": 64515720,
+              "checksum": 1025586646,
+              "states": "{ACTIVE=1}"
+            },
+            {
+              "setupNanos": 1040034066,
+              "input": {
+                "previousUtf16Units": 1048576,
+                "previousUtf8Bytes": 3112960,
+                "currentUtf16Units": 1048584,
+                "currentUtf8Bytes": 3112980,
+                "commentCount": 1000
+              },
+              "sample": 9,
+              "nanos": 19078929,
+              "allocatedBytes": 64515720,
+              "checksum": 1098842835,
+              "states": "{ACTIVE=1}"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "elapsed_seconds": 275.00020452599983
+}

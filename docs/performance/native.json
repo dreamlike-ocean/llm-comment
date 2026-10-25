@@ -1,0 +1,100 @@
+{
+  "environment": "Linux-7.3.0-6-generic-x86_64-with-glibc2.44",
+  "configuration": {
+    "before": "/tmp/llm-comment-perf/baseline-mcp",
+    "after": "comment-mcp/target/llm-comment-mcp",
+    "output": "/tmp/llm-comment-perf/chinese-native-final.json",
+    "warmup": 2,
+    "samples": 5,
+    "forks": 2,
+    "heap": "512m",
+    "cases": [
+      "list-changed",
+      "get-nearmiss"
+    ]
+  },
+  "sha256": {
+    "before": "8600d9c5831bb2b69af74d6ec3bb674f863aefda1095cf075fdc6d0972e35748",
+    "after": "ab519c8d58a54b1bfb35fcebbad59d6c2c5030e02b8a53c6eafcee9fab0247be"
+  },
+  "input": {
+    "utf16_units": 1048576,
+    "utf8_bytes": 3112960,
+    "comments": 1000,
+    "language": "chinese"
+  },
+  "nearmiss_input": {
+    "utf16_units": 1000001,
+    "pattern_utf16_units": 10001,
+    "comments": 1
+  },
+  "measurement": "每 fork 一个持久 MCP 进程；中文主体8192行、1000个均匀分布评论。计时包含 MCP stdio 往返、SQL、源码读取、定位、JSON 编解码及客户端结构化结果一致性检查；不含进程启动、建库、外部源码写入和行号校验。",
+  "before": {
+    "list-changed": {
+      "p50_ms": 8374.8785195,
+      "p95_ms": 8421.3707131,
+      "samples_ms": [
+        8372.994862,
+        8381.000682,
+        8404.366065,
+        8435.283607,
+        8364.517281,
+        8400.44791,
+        8342.809538,
+        8338.453222,
+        8376.762177,
+        8359.859828
+      ]
+    },
+    "get-nearmiss": {
+      "p50_ms": 806.7994215,
+      "p95_ms": 813.08860915,
+      "samples_ms": [
+        805.614151,
+        807.32482,
+        805.884839,
+        804.708787,
+        816.632248,
+        807.747268,
+        808.757495,
+        806.807105,
+        806.791738,
+        806.015255
+      ]
+    }
+  },
+  "after": {
+    "list-changed": {
+      "p50_ms": 78.554795,
+      "p95_ms": 80.81617519999999,
+      "samples_ms": [
+        81.149564,
+        77.228284,
+        78.967828,
+        79.761195,
+        80.4087,
+        78.141762,
+        75.08638,
+        73.509122,
+        77.730309,
+        79.133907
+      ]
+    },
+    "get-nearmiss": {
+      "p50_ms": 44.232691,
+      "p95_ms": 45.459520149999996,
+      "samples_ms": [
+        42.793744,
+        44.352678,
+        43.961079,
+        44.805783,
+        44.078495,
+        42.819415,
+        44.112704,
+        45.994396,
+        44.57836,
+        44.396062
+      ]
+    }
+  }
+}
