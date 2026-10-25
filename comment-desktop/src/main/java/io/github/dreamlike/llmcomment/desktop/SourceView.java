@@ -35,7 +35,7 @@ public final class SourceView extends BorderPane {
   public SourceView() {
     getStyleClass().add("source-view");
     list.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-    list.setFixedCellSize(28);
+    // 保留虚拟化，由可见行的字体、字形和 CSS 留白决定高度。
     list.setCellFactory(ignored -> new SourceCell());
     list.getSelectionModel()
         .getSelectedIndices()
@@ -142,17 +142,15 @@ public final class SourceView extends BorderPane {
     private final Label number = new Label();
     private final Label marker = new Label();
     private final Label code = new Label();
-    private final HBox row = new HBox(8, number, marker, code);
+    private final HBox row = new HBox(number, marker, code);
 
     private SourceCell() {
       getStyleClass().add("source-line");
       number.getStyleClass().add("line-number");
       marker.getStyleClass().add("line-marker");
       code.getStyleClass().add("code-text");
-      number.setMinWidth(62);
+      row.getStyleClass().add("source-row");
       number.setAlignment(Pos.CENTER_RIGHT);
-      marker.setMinWidth(16);
-      marker.setMaxWidth(16);
       code.setMinWidth(USE_PREF_SIZE);
       row.setAlignment(Pos.CENTER_LEFT);
       row.setMinWidth(USE_PREF_SIZE);
@@ -177,7 +175,8 @@ public final class SourceView extends BorderPane {
         if (Character.isHighSurrogate(value.charAt(boundary - 1))) boundary--;
         code.setText(value.substring(0, boundary) + "  …（超长行仅显示前 10000 字符，选择和复制保留全文）");
       } else {
-        code.setText(value);
+        // 空白行同样使用源码字体的行盒；选择及复制仍读取未修改的原文。
+        code.setText(value.isEmpty() ? " " : value);
       }
       setGraphic(row);
     }

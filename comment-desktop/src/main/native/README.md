@@ -18,4 +18,8 @@ GluonFX 的旧链接器不能识别 GraalVM 25 的静态库目录，因此脚本
 
 第三方版权与许可文件复制到 `target/desktop-native/licenses`，包括 SDK 随附法律文件、Substrate 的 LICENSE、所用 GluonFeature 源码及来源链接。发布可执行文件时需要一并保留这些材料；此构建配置不替项目选择根许可证。
 
+桌面资源准备还会下载固定 SHA-256 的中文、生僻字及单色 emoji 字体，嵌入可执行文件。字体在启动时解压到临时目录，Fontconfig 的进程内配置通过 Java 25 FFM 调用；`reachability-metadata.json` 注册 downcall 签名。Linux 仍需系统 `libfontconfig.so.1`，不需要另行安装这些内置字体。
+
+`prepare_desktop_javafx.py` 生成修订过的 OpenJFX 21.0.8 `PangoGlyphLayout`，修正不可见字形、补充平面字符的 UTF-16 索引及换行拆分后的 UTF-8 缓存。应用 classes 放在 JavaFX JAR 前，因此 JVM 和 Native Image 使用相同修补。字体许可证和排版兼容源码分别保留在发布目录的 `licenses/fonts` 与 `licenses/javafx-compat`。升级 JavaFX 后须重新验证字形光栅、完整混排及光标命中。
+
 来源：[Gluon Substrate](https://github.com/gluonhq/substrate/tree/0.0.69)、[JNI 静态库调用规范](https://docs.oracle.com/en/java/javase/25/docs/specs/jni/invocation.html#support-for-statically-linked-libraries)。

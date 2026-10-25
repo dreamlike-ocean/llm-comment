@@ -113,7 +113,7 @@ def metadata(jars, substrate, output):
     (output / "reflect-config.json").write_text(json.dumps(reflection))
     (output / "jni-config.json").write_text(json.dumps(jni))
     (output / "resource-config.json").write_text(json.dumps({"resources": {"includes": [
-        {"pattern": r".*\.(css|bss|png|jpg|jpeg|gif|bmp|ttf|raw|xml|fxml|gls|json|dat|frag|vert)$"}]},
+        {"pattern": r".*\.(css|bss|png|jpg|jpeg|gif|bmp|ttf|otf|txt|raw|xml|fxml|gls|json|dat|frag|vert)$"}]},
         "bundles": [{"name": name.replace("/", ".")} for name in sorted(bundles)]}))
 
 
@@ -148,6 +148,10 @@ def main():
             archive.extractall(cache)
     licenses = work / "licenses"
     shutil.copytree(cache / "sdk/legal", licenses / "openjfx", dirs_exist_ok=True)
+    shutil.copytree(target / "classes/io/github/dreamlike/llmcomment/desktop/fonts/licenses",
+                    licenses / "fonts", dirs_exist_ok=True)
+    shutil.copytree(target / "classes/io/github/dreamlike/llmcomment/desktop/javafx-compat",
+                    licenses / "javafx-compat", dirs_exist_ok=True)
     with zipfile.ZipFile(substrate) as archive:
         for name in archive.namelist():
             if any(token in name.upper() for token in ["LICENSE", "NOTICE", "COPYING"]) and not name.endswith("/"):

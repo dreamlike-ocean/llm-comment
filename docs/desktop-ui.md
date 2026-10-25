@@ -8,9 +8,53 @@
 
 `WorkspaceModel` 封装 core API 和目录访问，不依赖 JavaFX。目录一次只加载一层，过滤 `.git`、`.idea`、`target`、`.llm-comments`、当前数据库及其辅助文件，不跟随目录符号链接。文件符号链接的实际目标需要在工作区内。
 
-`SourceView` 使用固定行高的 `ListView`，仅创建可见行控件。`SourceLines` 保存 UTF-16 offset 与原始换行，支持中文、emoji、LF、CRLF、CR、空文件及末尾空行。点击和 Shift 选择形成连续行范围，复制保留范围内原始换行。超过 10,000 个 UTF-16 单元的单行限制显示长度，并提示可复制全文；截断不改变真实选区或复制内容。
+`SourceView` 使用虚拟化 `ListView`，行高由每行 `Label`/`HBox` 的首选高度及 CSS 上下留白计算。字号、字体或样式变化会重新布局，空行也保留当前源码字体的行盒。行间距、行号槽和标记槽使用 `em` 随字号变化。该方式需要测量可见行，并估算未显示行的高度，换取中文及不同字形的自适应布局。
+
+`SourceLines` 保存 UTF-16 offset 与原始换行，支持中文、emoji、LF、CRLF、CR、空文件及末尾空行。点击和 Shift 选择形成连续行范围，复制保留范围内原始换行。超过 10,000 个 UTF-16 单元的单行限制显示长度，并提示可复制全文；截断不改变真实选区或复制内容。
 
 `DesktopApplication` 在 JavaFX 线程处理界面状态，通过单个后台执行器读取文件、执行 diff 和数据库操作。任务运行期间禁用可能冲突的操作，回调校验请求序号，窗口退出后不再回写 UI。切换文件或工作区、切换评论、关闭窗口时检查未保存的正文及作者变更。
+
+## 高 DPI 与窗口布局
+
+默认使用自动缩放。`UiScale` 先检查 JavaFX 报告的输出缩放，系统已应用大于 1 的比例时不再额外补偿；否则按 `Screen.getDpi() / 96` 计算，取最近的 25% 档位，自动比例限制为 100%～250%。例如本机 4K 屏幕报告 163 DPI、输出缩放为 1，应用采用 175%。显示器上报的物理尺寸可能不准确，因此提供右上角菜单及 `--scale auto|150%|1.5` 覆盖。
+
+`ScaledPane` 用 JavaFX `Scale` 变换整个工作区，布局宽高按视口尺寸除以缩放比例计算。字体、行高、间距与鼠标命中使用相同的坐标变换。源码选择继续存储逻辑行号。最小逻辑界面为 1050×720，较小视口通过外层滚动访问完整界面；正常尺寸预留像素取整余量，防止浮点误差产生多余滚动条。
+
+正文和源码字号为 16px，按钮和评论预览为 14px，辅助信息通常为 12px，整体再随界面缩放。目录栏和评论栏使用固定调整策略及宽度上下限，用户仍可拖动分隔条；最大化时新增空间分配给源码区域。Ctrl/Cmd+加号、减号调整比例，Ctrl/Cmd+0 恢复自动。手动比例作用于当前进程。
+
+## UTF-8、字体与排版
+
+core 按 UTF-8 解码源码，保存原始字符串；UTF-16 offset 用于 Java 内部范围定位。简繁体、补充平面汉字、emoji、组合字符、BOM 和 CRLF 不做归一化或替换。遇到非法 UTF-8 时返回 `FILE_READ_ERROR`，消息明确提示转换编码，事务回滚并保留旧快照及评论历史。程序不会猜测 GBK 等旧编码。
+
+桌面端另需处理字形与排版。DejaVu Sans Mono 缺少汉字，依赖系统回退会出现字体混用或生僻字方框。Linux JavaFX 21 的 FreeType 管线不绘制 Noto Color Emoji 的位图字形，某些 emoji 虽能找到 glyph，光栅结果仍为空。
+
+`scripts/prepare_desktop_fonts.py` 准备三种随应用分发的字体：
+
+| 字体 | 用途 |
+| --- | --- |
+| Noto Sans Mono CJK SC | 源码主字体和简繁体、全角标点回退 |
+| HanaMinB | 补充平面汉字，例如 `𠀀` |
+| Noto Emoji | 可由 JavaFX 21 绘制的轮廓 emoji，显示为单色 |
+
+文件来源及 SHA-256 固定，字体和许可证生成到 `target`，缓存位于用户目录的 `llm-comments/desktop-fonts-v1`。三个字体总计约 47 MiB，嵌入 JAR 和 Native Image；下载文件不进入 Git。首次桌面构建需要联网和 Python 3，之后校验并复用缓存。
+
+`DesktopFonts` 在首次布局前将字体释放到可写临时目录并加载。Linux 上通过 Java 25 FFM 调用 Fontconfig，给当前进程排除不支持的 Noto Color Emoji。`EmbeddedFontFallbacks` 向 JavaFX 回退表加入内置字体，保留其他系统回退；适配器与 FontConfigManager 同包，兼容 Gluon 静态 SDK 中该类的包访问权限。该操作不写系统配置。Native Image 元数据声明所需的三个 downcall 签名。字体覆盖仍有边界，不能保证所有 Unicode 版本中的字符及 emoji 序列都能显示。
+
+Linux Pango 兼容处理由 `scripts/prepare_desktop_javafx.py` 从固定版本的 OpenJFX 源码生成，修正三处排版行为：
+
+- 空字形 `PANGO_GLYPH_EMPTY` 映射为 JavaFX 的不可见字形，使 `❤️` 的变体选择符按零宽度显示。
+- Pango 字符索引转换为 UTF-16 offset，让复杂 emoji 后的光标命中正确字符。
+- 换行拆分改变 TextRun 范围后重建 UTF-8 缓存，对当前范围重新排版。
+
+兼容类优先于依赖中的同名类加载，JVM 使用可执行 JAR 的 classpath 方式运行。输入文本中的变体选择符、ZWJ 和代理对保持原样。
+
+这部分使用 JavaFX 内部接口，与本文列出的版本一起验证。生成资源保留上游许可证、原始源码、修改后的源码及补丁说明；升级 JavaFX 时必须重新核对补丁和实际排版回归，不能只验证编译通过。
+
+## Google 官方 Material 与 JavaFX
+
+2026-10-25 核查的 Google 官方 Material 开发资料没有提供 JavaFX 控件库。现有官方实现包括 [Android Compose Material 3](https://developer.android.com/develop/ui/compose/designsystems/material3)、[Flutter Material](https://docs.flutter.dev/ui/widgets/material) 和 [Material Web](https://github.com/material-components/material-web)。[MaterialFX](https://github.com/palexdev/MaterialFX) 与 [JFoenix](https://github.com/sshahine/JFoenix) 是第三方 JavaFX 项目。
+
+本项目的实现是 JavaFX 标准控件配合 Material 风格 CSS，覆盖配色、圆角、排版和控件状态。Google 官方 [material-color-utilities](https://github.com/material-foundation/material-color-utilities) 提供 Apache 2.0 许可的 Java 配色算法源码，可以用于生成颜色主题，但它不提供控件。本项目暂未接入该算法，也未实现完整的 Material 3 动效或涟漪效果。
 
 ## 快照与并发
 
@@ -38,7 +82,7 @@ mvn -pl comment-desktop -am -Pnative-release verify
 comment-desktop/target/llm-comment-desktop
 ```
 
-启动参数为可选的 `--workspace PATH`、`--database PATH`、`--file FILE` 和 `--help`。工作区发现规则与 CLI 相同。图形冒烟测试使用 `--smoke-test`，可附加 `--screenshot PATH`；测试数据全部在临时工作区中生成。
+启动参数为可选的 `--workspace PATH`、`--database PATH`、`--file FILE`、`--scale VALUE`、`--maximized` 和 `--help`。工作区发现规则与 CLI 相同。图形冒烟测试使用 `--smoke-test`，可附加 `--screenshot PATH`；测试数据全部在临时工作区中生成。
 
 原生构建当前实现 Linux x64。需要 GraalVM JDK 25、Maven、Python 3、GCC、binutils 的 `objcopy`、`pkg-config`，以及 GTK3/X11/OpenGL 等开发库。脚本在 Debian/Ubuntu 缺少开发包时通过 `apt download`、`dpkg-deb -x` 解包到用户缓存，不需要 sudo。其他发行版需预装对应开发库。
 
@@ -66,17 +110,17 @@ GluonFX 旧链接器不能直接识别 GraalVM 25 的静态库布局，因此本
 
 完整构建命令、SDK 版本与校验值记录在 `comment-desktop/target/desktop-native/build-recipe.json`。原始 JDK 和 SDK 不改写。这是本项目实测的兼容组合，升级 GraalVM、JavaFX 或 Substrate 后需要重新执行原生界面测试。
 
-运行时不需要 JDK，仍需 GTK3、X11、OpenGL、字体及可写临时目录。原生可执行文件并非完全静态链接。详细链接适配见[原生构建说明](../comment-desktop/src/main/native/README.md)。
+运行时不需要 JDK，仍需 GTK3、X11、OpenGL、Fontconfig 及可写临时目录。内置字体负责上述中文及 emoji 回退，其他文字继续使用系统字体。原生可执行文件并非完全静态链接。详细链接适配见[原生构建说明](../comment-desktop/src/main/native/README.md)。
 
 ## 开源依赖与发布材料
 
-构建只下载公开 SDK、Maven 构件与源码，不使用 Gluon 账户、商业组件或付费服务。`target/desktop-native/licenses` 收集 JavaFX SDK 自带的法律文件、Substrate LICENSE、所用 Feature 源码及来源链接。发布时应随可执行文件保留该目录，并按项目最终许可证处理源码发布；构建脚本不替项目选择根许可证。
+构建只下载公开 SDK、Maven 构件、字体与源码，不使用 Gluon 账户、商业组件或付费服务。`target/desktop-native/licenses` 收集 JavaFX SDK 自带的法律文件、Substrate LICENSE、所用 Feature 源码、字体许可证、JavaFX 排版兼容补丁源码及来源链接。发布时应随可执行文件保留该目录，并按项目最终许可证处理源码发布；构建脚本不替项目选择根许可证。
 
 来源：[OpenJFX](https://github.com/openjdk/jfx)、[Gluon Substrate 0.0.69](https://github.com/gluonhq/substrate/tree/0.0.69)、[JNI 静态链接规范](https://docs.oracle.com/en/java/javase/25/docs/specs/jni/invocation.html#support-for-statically-linked-libraries)。
 
 ## 验证与限制
 
-2026-10-25 在 Linux x64、Oracle GraalVM 25.0.2 上完成 JVM 界面测试、`-O0` 原生构建及界面测试、全工程 `-O3` 发布构建。72 项 JUnit 测试及 CLI/MCP 共享数据库检查通过。桌面 `-O3` ELF 约 76.6 MiB；清除 `JAVA_HOME`、`GRAALVM_HOME`、`JDK_HOME` 并将 `PATH` 指向不存在的目录后，仍通过完整界面测试。动态依赖为系统图形及 C/C++ 库，不依赖 `libjvm`。
+2026-10-25 在 Linux x64、Oracle GraalVM 25.0.2 上完成 78 项 JUnit 测试、JVM 界面测试及 CLI、MCP、桌面端的 `-O3` 构建与运行检查。CLI/MCP 共用数据库检查通过。桌面验证包含 Unicode 渲染、换行、光标命中、自适应行高和评论完整流程。清除 `JAVA_HOME`、`GRAALVM_HOME`、`JDK_HOME` 并将 `PATH` 指向不存在的目录后，普通窗口 100% 及 4K 最大化 175% 均通过检查。动态依赖为系统图形及 C/C++ 库，不依赖 `libjvm`。
 
 下图来自该 `-O3` 产物的临时工作区测试：
 
@@ -84,4 +128,8 @@ GluonFX 旧链接器不能直接识别 GraalVM 25 的静态库布局，因此本
 
 行为测试包括工作区路径、目录与符号链接边界、快照一致性、跨实例正文冲突、CRLF/中文/emoji 行模型。`--smoke-test` 通过真实控件执行选行、新增评论、刷新后的位移、作者与正文修改、历史源码查看、过期选区拒绝、删除及历史保留，同时断言源码字节未被修改。
 
-当前尚未实现语法高亮、自动文件监听、跨文件重命名跟踪或安装包。中文显示和程序化输入有测试，实际中文输入法组合输入、HiDPI、多显示器及 Windows/macOS 原生构建仍需在对应环境验证。
+Unicode 回归覆盖 UTF-8 BOM、非法 UTF-8、简繁体、`𠮷/𠀀/龘`、全角标点、`é` 组合音标、单个 emoji、肤色及 ZWJ 序列。界面测试使用源码和正文控件的字体，检查 glyph 覆盖与非空光栅，再检查完整混排、反复换行和字号变化后的全文覆盖及光标位置。每次界面检查包含 120 次布局、约 2.2 万次字形核验；JavaFX 线程未处理的异常会使测试失败。
+
+行高回归通过控件切换 16px、24px、16px 字号，并加大、恢复 CSS 上下留白。检查文字行、空行和 emoji 行的高度随样式变化，文字和行盒均能完整容纳，选区原文及行号保持一致。
+
+当前尚未实现语法高亮、自动文件监听、跨文件重命名跟踪或安装包。中文显示、程序化输入、4K 自动缩放与最大化有测试，实际中文输入法组合输入、不同 DPI 的显示器之间移动窗口及 Windows/macOS 原生构建仍需在对应环境验证。

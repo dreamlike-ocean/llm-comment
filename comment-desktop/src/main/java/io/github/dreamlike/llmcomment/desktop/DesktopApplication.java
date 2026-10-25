@@ -13,6 +13,7 @@ import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.FXCollections;
 import javafx.geometry.Pos;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -21,6 +22,7 @@ import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.layout.*;
 import javafx.stage.DirectoryChooser;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
 
 /** 文件及数据库操作在单个后台队列中执行，界面显示同一快照中的源码和评论。 */
@@ -54,11 +56,15 @@ public final class DesktopApplication extends Application {
   final Button currentFile = button("返回当前文件", "tonal-button");
   final TextField filter = new TextField();
   final ProgressIndicator progress = new ProgressIndicator();
+  final MenuButton scaleChoice = new MenuButton();
+  final SplitPane columns = new SplitPane();
   WorkspaceModel model;
   FileComments current;
   CommentView selected;
   Stage stage;
   BorderPane root;
+  ScaledPane viewport;
+  private double scaleMode;
   boolean historical;
   boolean dirty;
   private boolean changing;
@@ -70,17 +76,33 @@ public final class DesktopApplication extends Application {
       Executors.newSingleThreadExecutor(Thread.ofPlatform().name("desktop-io").daemon().factory());
 
   @Override
+  public void init() throws Exception {
+    DesktopFonts.initialize();
+  }
+
+  @Override
   public void start(Stage window) throws Exception {
     stage = window;
     root = new BorderPane();
-    root.getStyleClass().add("workbench");
+    root.getStyleClass().addAll("root", "workbench");
     root.setTop(header());
-    SplitPane columns = new SplitPane(fileBrowser(), sourcePanel(), commentPanel());
+    Node browser = fileBrowser(), commentPane = commentPanel();
+    columns.getItems().addAll(browser, sourcePanel(), commentPane);
+    SplitPane.setResizableWithParent(browser, false);
+    SplitPane.setResizableWithParent(commentPane, false);
     columns.getStyleClass().add("columns");
-    columns.setDividerPositions(0.19, 0.70);
+    columns.setDividerPositions(0.21, 0.68);
     root.setCenter(columns);
     root.setBottom(footer());
-    Scene scene = new Scene(root, 1380, 900);
+    scaleMode = options.scale();
+    viewport = new ScaledPane(root);
+    updateScale();
+    Rectangle2D available = Screen.getPrimary().getVisualBounds();
+    Scene scene =
+        new Scene(
+            viewport,
+            Math.min(1380 * viewport.getZoom(), available.getWidth() * 0.92),
+            Math.min(900 * viewport.getZoom(), available.getHeight() * 0.90));
     scene.getStylesheets().add(getClass().getResource("material.css").toExternalForm());
     scene
         .getAccelerators()
@@ -89,10 +111,36 @@ public final class DesktopApplication extends Application {
         .getAccelerators()
         .put(
             new KeyCodeCombination(KeyCode.ENTER, KeyCombination.SHORTCUT_DOWN), () -> save.fire());
+    scene
+        .getAccelerators()
+        .put(
+            new KeyCodeCombination(
+                KeyCode.EQUALS, KeyCombination.SHORTCUT_DOWN, KeyCombination.SHIFT_ANY),
+            () -> stepScale(0.25));
+    scene
+        .getAccelerators()
+        .put(
+            new KeyCodeCombination(KeyCode.PLUS, KeyCombination.SHORTCUT_DOWN),
+            () -> stepScale(0.25));
+    scene
+        .getAccelerators()
+        .put(
+            new KeyCodeCombination(KeyCode.MINUS, KeyCombination.SHORTCUT_DOWN),
+            () -> stepScale(-0.25));
+    scene
+        .getAccelerators()
+        .put(
+            new KeyCodeCombination(KeyCode.DIGIT0, KeyCombination.SHORTCUT_DOWN),
+            () -> setScale(0));
     stage.setTitle("行间 · 本地代码评论");
     stage.setMinWidth(1050);
     stage.setMinHeight(720);
     stage.setScene(scene);
+    stage.xProperty().addListener((o, before, after) -> updateScale());
+    stage.yProperty().addListener((o, before, after) -> updateScale());
+    stage.widthProperty().addListener((o, before, after) -> updateScale());
+    stage.heightProperty().addListener((o, before, after) -> updateScale());
+    stage.outputScaleXProperty().addListener((o, before, after) -> updateScale());
     stage.setOnCloseRequest(
         event -> {
           if (busy.get()) {
@@ -102,6 +150,7 @@ public final class DesktopApplication extends Application {
             event.consume();
           }
         });
+    stage.setMaximized(options.maximized());
     stage.show();
     bindActions();
     if (options.smoke()) {
@@ -125,17 +174,83 @@ public final class DesktopApplication extends Application {
     theme.getStyleClass().add("tonal-button");
     theme.setOnAction(
         event -> {
-          if (theme.isSelected()) root.getStyleClass().add("dark");
-          else root.getStyleClass().remove("dark");
+          if (theme.isSelected()) {
+            root.getStyleClass().add("dark");
+            viewport.getStyleClass().add("dark");
+          } else {
+            root.getStyleClass().remove("dark");
+            viewport.getStyleClass().remove("dark");
+          }
           theme.setText(theme.isSelected() ? "浅色" : "深色");
         });
     VBox project = new VBox(3, workspaceTitle, workspacePath);
-    project.setMaxWidth(600);
-    workspacePath.setMaxWidth(600);
-    HBox header = new HBox(18, identity, spacer(), project, choose, refresh, theme);
+    project.setMinWidth(0);
+    project.setMaxWidth(320);
+    workspaceTitle.setMinWidth(0);
+    workspacePath.setMinWidth(0);
+    workspacePath.setMaxWidth(320);
+    scaleChoice.getStyleClass().add("tonal-button");
+    scaleChoice.setTooltip(new Tooltip("调整界面大小 · Ctrl/Cmd + 加号、减号；0 恢复自动"));
+    MenuItem automatic = new MenuItem("自动适配屏幕");
+    automatic.setOnAction(event -> setScale(0));
+    scaleChoice.getItems().add(automatic);
+    for (double scale : new double[] {0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3}) {
+      MenuItem choice = new MenuItem(Math.round(scale * 100) + "%");
+      choice.setOnAction(event -> setScale(scale));
+      scaleChoice.getItems().add(choice);
+    }
+    HBox header = new HBox(14, identity, spacer(), project, choose, refresh, scaleChoice, theme);
     header.setAlignment(Pos.CENTER_LEFT);
     header.getStyleClass().add("app-header");
     return header;
+  }
+
+  void setScale(double scale) {
+    scaleMode = scale;
+    updateScale();
+  }
+
+  private void stepScale(double step) {
+    setScale(Math.clamp(viewport.getZoom() + step, 0.75, 3));
+  }
+
+  private void updateScale() {
+    if (viewport == null) return;
+    Screen screen = Screen.getPrimary();
+    if (Double.isFinite(stage.getX()) && Double.isFinite(stage.getY())) {
+      double bestArea = -1;
+      for (Screen candidate :
+          Screen.getScreensForRectangle(
+              stage.getX(),
+              stage.getY(),
+              Math.max(1, stage.getWidth()),
+              Math.max(1, stage.getHeight()))) {
+        Rectangle2D bounds = candidate.getBounds();
+        double area =
+            Math.max(
+                    0,
+                    Math.min(stage.getX() + stage.getWidth(), bounds.getMaxX())
+                        - Math.max(stage.getX(), bounds.getMinX()))
+                * Math.max(
+                    0,
+                    Math.min(stage.getY() + stage.getHeight(), bounds.getMaxY())
+                        - Math.max(stage.getY(), bounds.getMinY()));
+        if (area > bestArea) {
+          bestArea = area;
+          screen = candidate;
+        }
+      }
+    }
+    double zoom =
+        scaleMode == 0
+            ? UiScale.automatic(
+                screen.getDpi(), Math.max(screen.getOutputScaleX(), screen.getOutputScaleY()))
+            : scaleMode;
+    viewport.setZoom(zoom);
+    scaleChoice.setText((scaleMode == 0 ? "自动 · " : "") + Math.round(zoom * 100) + "%");
+    for (MenuItem choice : scaleChoice.getItems()) {
+      choice.setStyle("-fx-font-size: " + (14 * zoom) + "px;");
+    }
   }
 
   private Node fileBrowser() {
@@ -186,8 +301,9 @@ public final class DesktopApplication extends Application {
         });
     VBox browser =
         new VBox(14, heading, directoryLabel, filter, files, label("双击打开 · Enter 进入", "muted"));
-    browser.setMinWidth(190);
-    browser.setPrefWidth(245);
+    browser.setMinWidth(210);
+    browser.setPrefWidth(280);
+    browser.setMaxWidth(400);
     browser.getStyleClass().add("file-browser");
     VBox.setVgrow(files, Priority.ALWAYS);
     return browser;
@@ -313,8 +429,9 @@ public final class DesktopApplication extends Application {
     historyTab.setClosable(false);
     tabs.getTabs().addAll(commentTab, historyTab);
     VBox panel = new VBox(14, heading, tabs);
-    panel.setMinWidth(320);
-    panel.setPrefWidth(380);
+    panel.setMinWidth(360);
+    panel.setPrefWidth(420);
+    panel.setMaxWidth(560);
     panel.getStyleClass().add("comment-panel");
     VBox.setVgrow(tabs, Priority.ALWAYS);
     return panel;
@@ -698,6 +815,10 @@ public final class DesktopApplication extends Application {
   }
 
   private void report(Exception error) {
+    if (options.smoke() && !(error instanceof CommentException)) {
+      exitCode = 1;
+      error.printStackTrace(System.err);
+    }
     status.getStyleClass().add("error-text");
     String message = error.getMessage();
     if (error instanceof CommentException exception) {

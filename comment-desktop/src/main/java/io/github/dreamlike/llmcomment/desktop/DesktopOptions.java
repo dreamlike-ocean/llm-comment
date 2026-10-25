@@ -5,11 +5,19 @@ import java.util.HashSet;
 import java.util.Set;
 
 record DesktopOptions(
-    Path workspace, Path database, String file, boolean help, boolean smoke, Path screenshot) {
+    Path workspace,
+    Path database,
+    String file,
+    boolean help,
+    boolean smoke,
+    Path screenshot,
+    double scale,
+    boolean maximized) {
   static DesktopOptions parse(String[] args) {
     Path workspace = null, database = null, screenshot = null;
     String file = null;
-    boolean help = false, smoke = false;
+    boolean help = false, smoke = false, maximized = false;
+    double scale = 0;
     Set<String> seen = new HashSet<>();
     for (int i = 0; i < args.length; i++) {
       String option = args[i];
@@ -22,8 +30,12 @@ record DesktopOptions(
         smoke = true;
         continue;
       }
-      if (!Set.of("--workspace", "--database", "--file", "--screenshot").contains(option))
-        throw new IllegalArgumentException("未知参数：" + option);
+      if (option.equals("--maximized")) {
+        maximized = true;
+        continue;
+      }
+      if (!Set.of("--workspace", "--database", "--file", "--screenshot", "--scale")
+          .contains(option)) throw new IllegalArgumentException("未知参数：" + option);
       if (++i == args.length || args[i].startsWith("--") || args[i].isBlank())
         throw new IllegalArgumentException("参数缺少值：" + option);
       switch (option) {
@@ -31,8 +43,9 @@ record DesktopOptions(
         case "--database" -> database = Path.of(args[i]);
         case "--file" -> file = args[i];
         case "--screenshot" -> screenshot = Path.of(args[i]);
+        case "--scale" -> scale = UiScale.parse(args[i]);
       }
     }
-    return new DesktopOptions(workspace, database, file, help, smoke, screenshot);
+    return new DesktopOptions(workspace, database, file, help, smoke, screenshot, scale, maximized);
   }
 }

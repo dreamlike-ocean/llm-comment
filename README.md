@@ -4,7 +4,7 @@
 
 ## 构建与运行
 
-构建需要 Java 25 和 Maven。构建 Native Image 时使用包含 `native-image` 的 GraalVM JDK 25，并准备平台所需的 C 工具链。原生集成检查使用 Python 3。
+构建需要 Java 25 和 Maven；桌面模块的字体和 JavaFX 兼容资源准备需要 Python 3，首次构建会下载固定 SHA-256 的公开文件，后续复用用户缓存。构建 Native Image 时使用包含 `native-image` 的 GraalVM JDK 25，并准备平台所需的 C 工具链。原生集成检查使用 Python 3。
 
 桌面原生构建当前支持 Linux x64，需要 GCC、objcopy、pkg-config、GTK3/X11/OpenGL 开发库。缺少开发包时，脚本在 Debian/Ubuntu 上自动下载解包到用户缓存，无需 sudo。原生 `verify` 会打开测试窗口，需要可用的 `DISPLAY`；无图形环境可以使用 Xvfb。只构建无头模块时，在下列命令中加 `-pl comment-cli,comment-mcp -am`。
 
@@ -65,6 +65,16 @@ comment-desktop/target/llm-comment-desktop \
 - 右侧创建、修改、删除评论；每次修改形成历史节点。历史页同时展示当时的正文与源码。
 - “刷新”同步外部代码修改和其他进程的评论。源码已变化的新增选区、已过时的正文版本会提示冲突，并保留草稿。
 - 支持浅色、深色主题，Ctrl/Cmd+R 刷新，Ctrl/Cmd+Enter 保存。
+- 自动适配高 DPI 屏幕；右上角可选择 75%～300% 缩放，Ctrl/Cmd+加号、减号调整，Ctrl/Cmd+0 恢复自动。窗口变宽时主要扩展源码区域。
+- 随应用提供中文、生僻字及 emoji 回退字体；Linux 使用单色 emoji。UTF-8 文件保留原字符、BOM 与换行；非法 UTF-8 会报告编码错误，保留已存快照。
+
+需要指定界面大小或直接最大化时：
+
+```sh
+comment-desktop/target/llm-comment-desktop --scale 150% --maximized
+```
+
+`--scale` 也接受 `1.5`、`auto`，默认 `auto`。手动缩放作用于当前进程，下次启动可通过参数指定。
 
 核心 API、CLI、MCP 和桌面端可以共用同一 SQLite 数据库。桌面端不提供源码编辑、跨文件重命名跟踪或语法高亮；文件变化通过手动刷新或评论操作同步。
 
@@ -75,7 +85,7 @@ comment-desktop/target/llm-comment-desktop \
   --smoke-test --screenshot /tmp/llm-comment-desktop.png
 ```
 
-原生程序运行时无需 JDK，仍依赖 GTK3、X11、OpenGL 和系统字体。构建固定使用 Gluon JavaFX 静态 SDK 与 Substrate 元数据，无需 Gluon 账户。发布时需保留 `comment-desktop/target/desktop-native/licenses`。具体版本、兼容处理及验证范围见[桌面端设计与构建](docs/desktop-ui.md)。
+原生程序运行时无需 JDK，仍依赖 GTK3、X11、OpenGL、Fontconfig 和可写临时目录。中文及 emoji 回退字体嵌入产物，其他文字继续使用系统字体。构建固定使用 Gluon JavaFX 静态 SDK 与 Substrate 元数据，无需 Gluon 账户。发布时需保留 `comment-desktop/target/desktop-native/licenses`。具体版本、兼容处理及验证范围见[桌面端设计与构建](docs/desktop-ui.md)。
 
 ## CLI
 

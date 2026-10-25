@@ -250,6 +250,8 @@ public final class CommentService implements AutoCloseable {
       if (f == null) throw new CommentException("FILE_NOT_FOUND", "源文件不存在");
       if (num(f, "missing") == 0) execute(c, "UPDATE files SET missing=1 WHERE file=?", file);
       return new FileState(snapshot(c, str(f, "snapshot")), true);
+    } catch (java.nio.charset.MalformedInputException e) {
+      throw new CommentException("FILE_READ_ERROR", "源文件不是有效的 UTF-8，请在编辑器中转换编码后重试", e);
     }
     SnapshotView previous = f == null ? null : snapshot(c, str(f, "snapshot"));
     if (previous != null && previous.text().equals(text)) {

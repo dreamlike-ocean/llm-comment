@@ -34,6 +34,9 @@ final class DesktopSmoke {
                             return "你好，" + name;
                         }
                     }
+                    // 简体：中文显示正常；繁體：臺灣、香港。
+                    // 生僻字：𠮷 𠀀 龘；标点：「」『』，。！？
+                    // 符号：→ ≤ ≥ ✓；组合：é；emoji：😀 🚀 🧑🏽‍💻 👩‍💻 ❤️
                     """
                         .replace("\n", "\r\n");
                 Files.writeString(source, original);
@@ -57,7 +60,7 @@ final class DesktopSmoke {
                 fx(
                     () -> {
                       app.source.highlight(4, 6);
-                      app.body.setText("这里需要处理空名字。\n保留中文、emoji 😀 和多行范围，后续修改可查历史。");
+                      app.body.setText("这里需要处理空名字。\n简体繁體𠮷𠀀；é；😀 🚀 🧑🏽‍💻 👩‍💻 ❤️\n后续修改可查历史。");
                       app.author.setText("reviewer");
                       require(!app.save.isDisabled(), "创建按钮未启用");
                       app.save.fire();
@@ -106,7 +109,8 @@ final class DesktopSmoke {
                     () -> {
                       app.author.setText("另一位审阅者");
                       require(app.dirty && !app.save.isDisabled(), "仅修改作者时无法保存");
-                      app.body.setText("增加空值检查，并为中文名字补充测试。\n这条修改生成了新的评论版本。");
+                      app.body.setText(
+                          "增加空值检查，并为中文名字补充测试。\n简体繁體𠮷𠀀；é；😀 🚀 🧑🏽‍💻 👩‍💻 ❤️\n这条修改生成了新的评论版本。");
                       app.save.fire();
                       return null;
                     });
@@ -138,12 +142,56 @@ final class DesktopSmoke {
                       app.tabs.getSelectionModel().select(0);
                       return null;
                     });
+                fx(
+                    () -> {
+                      String selected = app.source.selectedText();
+                      double automatic = app.viewport.getZoom();
+                      app.setScale(2);
+                      app.stage.getScene().getRoot().applyCss();
+                      app.stage.getScene().getRoot().layout();
+                      var codeLabel = (javafx.scene.control.Label) app.source.lookup(".code-text");
+                      require(codeLabel != null, "源码字形测试未找到可见行");
+                      FontRenderingCheck.verify(codeLabel.getFont(), app.body.getFont());
+                      SourceLayoutCheck.verify(app.source);
+                      require(
+                          app.viewport.getZoom() == 2 && app.source.selectedText().equals(selected),
+                          "缩放改变了源码选区");
+                      require(
+                          app.root.localToScene(1, 0).getX() - app.root.localToScene(0, 0).getX()
+                              == 2,
+                          "界面未整体缩放");
+                      app.setScale(DesktopApplication.options.scale());
+                      require(app.viewport.getZoom() == automatic, "未恢复指定缩放");
+                      return null;
+                    });
                 if (screenshot != null) {
                   fx(
                       () -> {
-                        app.root.applyCss();
-                        app.root.layout();
-                        PngSnapshot.write(app.root.snapshot(null, null), screenshot);
+                        app.stage.getScene().getRoot().applyCss();
+                        app.stage.getScene().getRoot().layout();
+                        require(
+                            app.columns.getItems().getFirst().getLayoutBounds().getWidth() <= 401,
+                            "目录栏随窗口过度扩张");
+                        var visible = app.viewport.getViewportBounds();
+                        var content = app.viewport.getContent().getLayoutBounds();
+                        double zoom = app.viewport.getZoom();
+                        if (visible.getWidth() >= 1050 * zoom
+                            && visible.getHeight() >= 720 * zoom) {
+                          require(
+                              content.getWidth() <= visible.getWidth()
+                                  && content.getHeight() <= visible.getHeight(),
+                              "正常尺寸产生额外滚动范围");
+                        }
+                        System.out.printf(
+                            "Desktop layout: %.0fx%.0f, scale=%.0f%%, sidebar=%.0f,"
+                                + " content=%.0fx%.0f%n",
+                            app.stage.getScene().getWidth(),
+                            app.stage.getScene().getHeight(),
+                            zoom * 100,
+                            app.columns.getItems().getFirst().getLayoutBounds().getWidth(),
+                            content.getWidth(),
+                            content.getHeight());
+                        PngSnapshot.write(app.stage.getScene().snapshot(null), screenshot);
                         return null;
                       });
                 }
@@ -195,6 +243,7 @@ final class DesktopSmoke {
                     "删除历史丢失");
                 require(app.model.history(created.id()).size() == 3, "删除未追加历史");
                 require(Files.readString(source).equals("// 再次插入\r\n" + moved), "评论操作改变源码");
+                require(DesktopApplication.exitCode == 0, "界面运行期间发生异常");
                 System.out.println(
                     "Desktop smoke passed: workspace, Chinese/CRLF/emoji, range, relocation,"
                         + " history, conflict, deletion.");
