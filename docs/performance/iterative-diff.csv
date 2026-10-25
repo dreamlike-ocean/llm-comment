@@ -1,0 +1,9 @@
+case,implementation,median_ms,old_length,new_length,edits
+chinese_crlf_wide,recursive,5.166,268890,269308,219
+chinese_crlf_wide,iterative,3.678,268890,269308,219
+skewed,recursive,21.851,1,6000,2
+skewed,iterative,26.850,1,6000,2
+repeat_near_match,recursive,0.023,1999,1999,3
+repeat_near_match,iterative,0.026,1999,1999,3
+balanced_rewrite,recursive,13.537,1999,1999,2
+balanced_rewrite,iterative,15.641,1999,1999,2

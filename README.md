@@ -38,40 +38,55 @@ Native Image 使用 `--no-fallback`。SQLite JDBC 的平台 JNI 动态库以资�
 
 ## CLI
 
-全局参数 `--workspace PATH` 指定工作区，默认使用当前目录。数据库默认位于工作区的 `.llm-comments/comments.db`。`--database PATH` 可指定数据库，相对路径以工作区为基准。源码路径同样以工作区为基准。
+所有命令共用一套工作区规则：
+
+- 指定 `--workspace PATH` 时直接使用该目录，相对路径以启动目录为基准。
+- 省略时，从启动目录向上寻找最近含有 `.llm-comments` 目录的位置；找不到时使用启动目录。
+- 数据库默认是工作区中的 `.llm-comments/comments.db`。`--database PATH` 覆盖本次调用的数据库位置。
+- `FILE`、`--file`、`--body-file` 和 `--database` 的相对路径都以工作区为基准。源码也可以用工作区内的绝对路径。
+
+`workspace` 命令输出解析后的工作区、数据库路径及数据库是否存在，查询过程不会创建数据库。第一次使用时在项目根目录运行；之后从子目录运行会找到同一个工作区。需要在子目录创建独立工作区时，使用 `--workspace .`。识别工作区依靠 `.llm-comments`，与 Git 或 Maven 文件无关。
 
 ```sh
 CLI=./comment-cli/target/llm-comment
 
-"$CLI" --workspace /absolute/project create src/Main.java \
+"$CLI" workspace
+"$CLI" create src/Main.java \
   --lines 250:260 --body '这里需要处理空输入' --author reviewer
 
-"$CLI" --workspace /absolute/project get COMMENT_ID
-"$CLI" --workspace /absolute/project list --file src/Main.java
-"$CLI" --workspace /absolute/project list --include-deleted
+"$CLI" get COMMENT_ID
+"$CLI" list src/Main.java
+"$CLI" list --include-deleted
 
-"$CLI" --workspace /absolute/project update COMMENT_ID \
+"$CLI" update COMMENT_ID \
   --base-revision REVISION_ID --body '更新后的评论' --author reviewer
 
-"$CLI" --workspace /absolute/project history COMMENT_ID
-"$CLI" --workspace /absolute/project snapshot FILE_VERSION_ID
+"$CLI" history COMMENT_ID
+"$CLI" snapshot FILE_VERSION_ID
 
-"$CLI" --workspace /absolute/project delete COMMENT_ID \
+"$CLI" delete COMMENT_ID \
   --base-revision REVISION_ID --author reviewer
 
 "$CLI" --help
 "$CLI" --version
+
+# 从项目外操作时，所有命令都用同一个全局参数指定工作区
+"$CLI" --workspace /absolute/project list src/Main.java
 ```
+
+`create FILE` 和 `list [FILE]` 都接受 `--file FILE` 写法。两种写法同时出现时，规范化后的路径需要相同。`list` 省略文件时查询整个工作区已经记录的评论，与启动时所在的子目录无关。
+
+`--database` 不会保存为配置。使用自定义数据库时，每次 CLI 调用或 MCP 启动都需要提供相同路径；其所在目录不参与工作区自动发现。从项目外或尚无 `.llm-comments` 的子目录访问自定义数据库时，同时指定 `--workspace`。
 
 `--lines N` 选择单行，`--lines N:M` 选择连续多行，首尾行均包含。`--author` 默认是 `anonymous`。更新和删除使用最近一次查询返回的 `currentRevisionId` 作为 `--base-revision`。
 
-创建和更新接受 `--body TEXT` 或 `--body-file PATH`，两者选一个。正文文件路径相对于启动进程的当前目录。`--body-file -` 从标准输入读取，保留正文换行：
+创建和更新接受 `--body TEXT` 或 `--body-file PATH`，两者选一个。正文文件路径相对于工作区，也可以使用绝对路径。`--body-file -` 从标准输入读取，保留正文换行：
 
 ```sh
-"$CLI" --workspace /absolute/project create src/Main.java \
+"$CLI" create src/Main.java \
   --lines 25 --body-file ./review.txt
 
-printf '第一段\n第二段\n' | "$CLI" --workspace /absolute/project update COMMENT_ID \
+printf '第一段\n第二段\n' | "$CLI" update COMMENT_ID \
   --base-revision REVISION_ID --body-file -
 ```
 
@@ -91,11 +106,11 @@ printf '第一段\n第二段\n' | "$CLI" --workspace /absolute/project update CO
 | 3 | 评论、快照或文件不存在 |
 | 4 | 正文版本冲突，或操作要求评论尚未删除 |
 
-未知参数、重复参数和当前命令不接受的参数会返回错误。
+未知参数、重复选项和当前命令不接受的参数会返回错误。
 
 ## MCP stdio
 
-将可执行文件与工作区的绝对路径填入 MCP 客户端配置：
+MCP 启动时使用相同的工作区发现规则，所有工具调用共用启动时确定的工作区。客户端若从项目根目录启动服务，`args` 可以为空；客户端启动目录不确定时，通过 `--workspace` 指定项目：
 
 ```json
 {
@@ -135,6 +150,9 @@ printf '第一段\n第二段\n' | "$CLI" --workspace /absolute/project update CO
 | `comment-mcp` | 调用 core 的 MCP stdio 服务 |
 
 core 的数据模型、范围迁移、中文搜索和事务设计见 [comment-core 设计文档](comment-core/DESIGN.md)。
+JavaFX、Swing、Compose 的桌面端比较及 Native Image 验证方案见[桌面端选型](docs/desktop-ui.md)。
+
+`new CommentService()` 使用与 CLI/MCP 相同的工作区发现规则。传入工作区路径的构造方法直接使用该目录，适合需要固定项目位置的调用方：
 
 ```java
 import io.github.dreamlike.llmcomment.core.CommentService;

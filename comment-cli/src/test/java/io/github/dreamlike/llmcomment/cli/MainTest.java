@@ -24,15 +24,120 @@ class MainTest {
   private Result run(String stdin, String... args) {
     List<String> all = new ArrayList<>(List.of("--workspace", workspace.toString()));
     all.addAll(List.of(args));
+    return runAt(workspace, stdin, all.toArray(String[]::new));
+  }
+
+  private Result runAt(Path cwd, String stdin, String... args) {
     ByteArrayOutputStream out = new ByteArrayOutputStream(), err = new ByteArrayOutputStream();
     int code =
         Main.run(
-            all.toArray(String[]::new),
+            args,
+            cwd,
             new ByteArrayInputStream(stdin.getBytes(StandardCharsets.UTF_8)),
             new PrintStream(out, true, StandardCharsets.UTF_8),
             new PrintStream(err, true, StandardCharsets.UTF_8));
     return new Result(
         code, out.toString(StandardCharsets.UTF_8), err.toString(StandardCharsets.UTF_8));
+  }
+
+  @Test
+  void positionalAndNamedFilesUseTheSameRules() throws Exception {
+    Files.writeString(workspace.resolve("pom.xml"), "<project>中文</project>\n");
+    Result created = run("", "create", "--file", "pom.xml", "--lines", "1", "--body", "检查依赖");
+    assertEquals(0, created.code(), created.err());
+    for (String[] args :
+        List.of(
+            new String[] {"list", "pom.xml"},
+            new String[] {"list", "--file", "pom.xml"},
+            new String[] {"list", "pom.xml", "--file", "./pom.xml"},
+            new String[] {"list", workspace.resolve("pom.xml").toString()})) {
+      Result listed = run("", args);
+      assertEquals(0, listed.code(), listed.err());
+      assertEquals(created.json().path("id"), listed.json().get(0).path("id"));
+      assertEquals("pom.xml", listed.json().get(0).path("file").asText());
+    }
+    Result conflicting = run("", "list", "pom.xml", "--file", "another.xml");
+    assertEquals(2, conflicting.code());
+    assertTrue(conflicting.json().path("message").asText().contains("不同文件"));
+    Result missing = run("", "create", "--lines", "1", "--body", "缺少文件");
+    assertEquals(2, missing.code());
+    assertTrue(missing.json().path("message").asText().contains("create FILE"));
+  }
+
+  @Test
+  void workspaceInspectionDoesNotCreateStorage() throws Exception {
+    Result result = runAt(workspace, "", "workspace");
+    assertEquals(0, result.code(), result.err());
+    assertEquals(workspace.toRealPath().toString(), result.json().path("workspace").asText());
+    assertFalse(result.json().path("databaseExists").asBoolean());
+    assertFalse(Files.exists(workspace.resolve(".llm-comments")));
+    assertEquals(0, runAt(workspace, "", "--help").code());
+    assertFalse(Files.exists(workspace.resolve(".llm-comments")));
+  }
+
+  @Test
+  void everyCommandDiscoversTheSameWorkspaceFromSubdirectories() throws Exception {
+    Files.writeString(workspace.resolve("示例.java"), "目标代码\n");
+    Result created = runAt(workspace, "", "create", "示例.java", "--lines", "1", "--body", "初稿");
+    assertEquals(0, created.code(), created.err());
+    String id = created.json().path("id").asText();
+    String revision = created.json().path("currentRevisionId").asText();
+    Path nested = Files.createDirectories(workspace.resolve("src/子目录"));
+    assertEquals(
+        workspace.toRealPath().toString(),
+        runAt(nested, "", "workspace").json().path("workspace").asText());
+    assertEquals(id, runAt(nested, "", "get", id).json().path("id").asText());
+    assertEquals(1, runAt(nested, "", "list", "示例.java").json().size());
+    Result updated = runAt(nested, "", "update", id, "--base-revision", revision, "--body", "修订");
+    assertEquals(0, updated.code(), updated.err());
+    assertEquals(2, runAt(nested, "", "history", id).json().size());
+    String snapshot = created.json().path("location").path("fileVersionId").asText();
+    assertEquals("目标代码\n", runAt(nested, "", "snapshot", snapshot).json().path("text").asText());
+    Result deleted =
+        runAt(
+            nested,
+            "",
+            "delete",
+            id,
+            "--base-revision",
+            updated.json().path("currentRevisionId").asText());
+    assertEquals(0, deleted.code(), deleted.err());
+    assertEquals(0, runAt(nested, "", "list").json().size());
+    assertFalse(Files.exists(nested.resolve(".llm-comments")));
+  }
+
+  @Test
+  void explicitWorkspaceAndAllRelativePathsUseOneBaseDirectory() throws Exception {
+    Path project = Files.createDirectories(workspace.resolve("项目"));
+    Path caller = Files.createDirectories(workspace.resolve("调用目录"));
+    Files.writeString(project.resolve("源.java"), "正确源码\n");
+    Files.writeString(project.resolve("正文.txt"), "项目中的正文\n");
+    Files.writeString(caller.resolve("正文.txt"), "错误的正文");
+    Result created =
+        runAt(
+            caller,
+            "",
+            "create",
+            "源.java",
+            "--lines",
+            "1",
+            "--body-file",
+            "正文.txt",
+            "--workspace",
+            "../项目",
+            "--database",
+            "store/评论.db");
+    assertEquals(0, created.code(), created.err());
+    assertEquals("项目中的正文\n", created.json().path("body").asText());
+    assertTrue(Files.isRegularFile(project.resolve("store/评论.db")));
+    assertFalse(Files.exists(caller.resolve("store")));
+    Result listed =
+        runAt(caller, "", "list", "源.java", "--workspace", "../项目", "--database", "store/评论.db");
+    assertEquals(0, listed.code(), listed.err());
+    assertEquals(1, listed.json().size());
+    Result inspect =
+        runAt(caller, "", "--workspace", "../项目", "workspace", "--database", "store/评论.db");
+    assertTrue(inspect.json().path("databaseExists").asBoolean());
   }
 
   @Test

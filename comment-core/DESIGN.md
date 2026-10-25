@@ -22,12 +22,14 @@ IDE 能收到每次文档编辑事件，并据此移动 RangeMarker。本工具�
 | 类型 | 职责 |
 | --- | --- |
 | [CommentService](src/main/java/io/github/dreamlike/llmcomment/core/CommentService.java) | 工作区路径、SQLite 事务、快照同步、评论与版本 API |
+| [Workspace](src/main/java/io/github/dreamlike/llmcomment/core/Workspace.java) | CLI、MCP 和 Java API 共用的工作区发现及路径解析 |
 | `CommentView` / `RevisionView` / `SnapshotView` | 当前评论、历史节点、文件内容的不可变返回值 |
 | `Location` / `AnchorStatus` | 对外位置与定位状态 |
 | `CommentException` | 稳定的错误代码、说明和补充信息 |
 | `Views` | 将返回值转换为 Map，供 CLI/MCP 序列化 |
 | [AnchorTracker](src/main/java/io/github/dreamlike/llmcomment/core/anchor/AnchorTracker.java) | 捕获范围、迁移端点、判断失效及恢复位置 |
 | [HierarchicalDiff](src/main/java/io/github/dreamlike/llmcomment/core/anchor/HierarchicalDiff.java) | 按行与内容切分变化，生成字符编辑区间 |
+| [IterativeMyersDiff](src/main/java/io/github/dreamlike/llmcomment/core/anchor/IterativeMyersDiff.java) | 用显式工作栈执行线性空间字符 Myers，限制前沿推进及比较量 |
 | [OccurrenceIndex](src/main/java/io/github/dreamlike/llmcomment/core/anchor/OccurrenceIndex.java) | 共享多模式计数与有界候选缓存 |
 | [LiteralSearch](src/main/java/io/github/dreamlike/llmcomment/core/anchor/LiteralSearch.java) | UTF-16 原文查找，选择 `indexOf` 或 KMP |
 | [LineMap](src/main/java/io/github/dreamlike/llmcomment/core/anchor/LineMap.java) | 行终止符识别、offset 到行号的索引 |
@@ -41,11 +43,19 @@ IDE 能收到每次文档编辑事件，并据此移动 RangeMarker。本工具�
 入口是 `io.github.dreamlike.llmcomment.core.CommentService`。
 
 ```java
+new CommentService();
 new CommentService(workspace);
 new CommentService(workspace, database);
+new CommentService(Workspace.resolve(workingDirectory, workspaceOverride, databaseOverride));
 ```
 
-工作区需要是已存在的目录。默认数据库为 `.llm-comments/comments.db`，相对数据库路径以工作区为基准。源码参数使用工作区相对路径。
+工作区需要是已存在的目录。无参构造从当前目录向上寻找最近含有 `.llm-comments` 目录的位置，找不到时使用当前目录。传入 `Path workspace` 时直接使用该目录。CLI 和 MCP 都通过 `Workspace.resolve` 采用相同的规则，工作区在每次 CLI 调用或 MCP 启动时确定。
+
+`Workspace.resolve` 的两个 override 参数允许为 `null`。相对的 `workspaceOverride` 基于传入的 `workingDirectory`，相对的 `databaseOverride` 基于最终工作区。默认数据库为 `.llm-comments/comments.db`。解析过程只检查目录，创建目录和打开数据库发生在 `CommentService` 构造时。工作区标识与 Git、Maven 文件无关。
+
+源码参数使用工作区相对路径，或者工作区内的绝对路径；存储及返回值使用规范化的工作区相对路径。CLI 的 `--body-file` 和 `--database` 相对路径也采用工作区为基准。`Workspace.sourcePath` 检查路径范围，`CommentService` 进一步检查实际符号链接目标和数据库文件。
+
+自定义数据库路径作用于本次构造，不会保存为工作区配置。其所在目录不参与自动发现，调用方需要在每次启动时传入相同的数据库位置和工作区。CLI `workspace` 命令通过只读解析报告实际路径，便于检查启动配置。
 
 | 方法 | 返回值 | 源码访问与历史行为 |
 | --- | --- | --- |
@@ -149,6 +159,12 @@ SQLite 保存四张表。评论和快照 ID 为 UUID，时间使用 `Instant` �
 
 内容哈希用于选择切点，块是否相同仍比较完整文本。相邻的删除、插入会合并，供端点映射统一处理。
 
+分层切块和字符 Myers 都使用 `ArrayDeque` 保存待处理区间，先压入后半段，再处理前半段，输出保持原文件 offset 顺序。切分深度限制用于控制扫描次数，输入规模不会增加 Java 调用栈深度。Myers 的两个前沿数组和工作栈占用 O(N+M) 空间。
+
+字符 Myers 每块还限制约 32,000,000 单位的前沿推进及字符比较工作量。输入长度乘积无法约束极端偏斜输入，例如 1 个字符与 1,000,000 个字符；长度差已经超过计算预算下界时，在分配前沿数组之前返回粗块。运行中超限会丢弃该块未完成的脚本，交给原文及上下文恢复。降级可能减少可确定的内部修改范围，但唯一原文仍可恢复，多个同分候选仍返回歧义。
+
+字符算法基于 java-diff-utils 4.15 的 `MyersDiffWithLinearSpace`，区间调度改用显式工作栈，并加入计算预算。未超限时保持相同的匹配选择，随机 UTF-16 测试逐条比较两个实现的编辑区间。搜索索引构建、失败链接遍历、KMP、恢复搜索及行号查找均使用迭代。
+
 ### 6.2 范围迁移与恢复
 
 `AnchorTracker.relocate` 为同一文件的全部锚点共享一次 diff 与原文索引。有效锚点先检查旧 offset 指向的文本是否匹配；失效锚点或检查失败的锚点进入原文恢复。
@@ -224,7 +240,7 @@ SQLite 锁只覆盖数据库，编辑器和其他进程仍可修改源码。多�
 | 错误代码 | 情况 |
 | --- | --- |
 | `INVALID_ARGUMENT` | 非法行范围、正文或作者参数 |
-| `INVALID_PATH` | 绝对源码路径、越出工作区或指向元数据 |
+| `INVALID_PATH` | 工作区不是目录、源码越出工作区或指向元数据 |
 | `FILE_NOT_FOUND` | 新目标文件不存在，或创建评论时目标缺失 |
 | `FILE_READ_ERROR` | 读取失败、非法 UTF-8 等 I/O 问题 |
 | `NOT_FOUND` | 评论或快照 ID 不存在 |
@@ -244,9 +260,11 @@ core 以普通 JAR 提供 API，CLI 和 MCP 分别构建可执行文件。Xerial
 | --- | --- |
 | 范围端点、空行、失效恢复、随机连续编辑 | `AnchorTrackerTest`、`AnchorTrackerRandomizedTest` |
 | 大文件切块、重复文本、多模式索引与预算 | `HierarchicalDiffTest` |
+| 随机 diff 对照与重建、小 JVM 栈、百万字符偏斜及降级恢复 | `IterativeMyersDiffTest` |
 | 中文长前缀、emoji、增补汉字、重叠匹配 | `LiteralSearchTest` |
 | LF/CRLF/CR 与所有 offset 的行号一致性 | `LineMapTest` |
 | 历史、快照、并发冲突、缺失恢复、路径和事务回滚 | `CommentServiceTest` |
+| 工作区发现、路径基准、绝对路径与符号链接 | `WorkspaceTest` |
 
 `mvn verify` 执行 JVM 测试；`native-test` 和 `native-release` 分别构建 `-O0`、`-O3`，在 `verify` 阶段运行入口集成检查。性能脚本另外测量固定输入的耗时与分配量，行为测试不设置脆弱的耗时断言。
 

@@ -1,0 +1,3 @@
+case,implementation,median_ms,old_length,new_length,coarse
+million_chinese_insert,iterative,0.001895,1,1000000,true
+million_chinese_delete,iterative,0.001511,1000000,1,true

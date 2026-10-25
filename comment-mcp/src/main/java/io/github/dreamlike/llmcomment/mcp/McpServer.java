@@ -96,7 +96,8 @@ public final class McpServer {
                 "serverInfo",
                 Map.of("name", "llm-comment", "version", "0.1.0-SNAPSHOT"),
                 "instructions",
-                "文件路径相对工作区，行号从1开始且包含首尾行；查询自动同步位置，修改必须提供最新baseRevisionId。"));
+                "相对文件路径以服务启动时确定的工作区为基准，也接受工作区内的绝对路径。"
+                    + "行号从1开始且包含首尾行；查询自动同步位置，修改必须提供最新baseRevisionId。"));
       }
       if (!ready) return error(id, -32002, "请先完成 initialize 和 notifications/initialized");
       return switch (method) {
@@ -292,7 +293,7 @@ public final class McpServer {
             "在当前文件的单行或连续多行创建评论，源码保持原样。",
             Map.of(
                 "file",
-                text("工作区相对路径"),
+                text("工作区相对路径或工作区内的绝对路径"),
                 "startLine",
                 line("起始行，包含，从1开始"),
                 "endLine",
@@ -310,7 +311,7 @@ public final class McpServer {
             "查询文件或工作区评论，自动同步定位，默认隐藏已删除评论。",
             Map.of(
                 "file",
-                text("工作区相对路径，省略时列出所有文件"),
+                text("工作区相对路径或工作区内的绝对路径，省略时列出整个工作区的评论"),
                 "includeDeleted",
                 Map.of("type", "boolean", "default", false))),
         tool(

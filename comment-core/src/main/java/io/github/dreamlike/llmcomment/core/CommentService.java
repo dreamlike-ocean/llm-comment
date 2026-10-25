@@ -12,13 +12,21 @@ import java.util.*;
 public final class CommentService implements AutoCloseable {
   private final Path workspace, database, defaultDatabaseDirectory;
 
+  public CommentService() {
+    this(Workspace.resolve(Path.of("."), null, null));
+  }
+
+  public CommentService(Workspace workspace) {
+    this(workspace.root(), workspace.database());
+  }
+
   public CommentService(Path workspace) {
     this(workspace, Path.of(".llm-comments/comments.db"));
   }
 
   public CommentService(Path workspace, Path database) {
     try {
-      this.workspace = workspace.toRealPath();
+      this.workspace = Workspace.directory(workspace);
       Path absolute =
           (database.isAbsolute() ? database : this.workspace.resolve(database)).normalize();
       Files.createDirectories(absolute.getParent());
@@ -117,7 +125,6 @@ public final class CommentService implements AutoCloseable {
   private String file(String name) throws IOException {
     if (name == null || name.isBlank()) throw new CommentException("INVALID_PATH", "文件路径不能为空");
     Path supplied = Path.of(name);
-    if (supplied.isAbsolute()) throw new CommentException("INVALID_PATH", "必须使用工作区相对路径");
     Path path = workspace.resolve(supplied).normalize();
     if (!path.startsWith(workspace) || path.equals(workspace))
       throw new CommentException("INVALID_PATH", "文件超出工作区");
@@ -275,13 +282,22 @@ public final class CommentService implements AutoCloseable {
         }
       }
       List<Anchor> moved = AnchorTracker.relocate(previous.text(), text, anchors);
-      try (PreparedStatement p = c.prepareStatement(
-          "UPDATE comments SET start=?,end=?,status=?,selected=?,before_text=?,after_text=? WHERE id=?")) {
+      try (PreparedStatement p =
+          c.prepareStatement(
+              "UPDATE comments SET start=?,end=?,status=?,selected=?,before_text=?,after_text=?"
+                  + " WHERE id=?")) {
         for (int i = 0; i < ids.size(); i++) {
           Anchor a = moved.get(i);
           if (a.equals(anchors.get(i))) continue;
-          bind(p, a.startOffset(), a.endOffset(), a.status().name(), a.text(), a.before(),
-              a.after(), ids.get(i));
+          bind(
+              p,
+              a.startOffset(),
+              a.endOffset(),
+              a.status().name(),
+              a.text(),
+              a.before(),
+              a.after(),
+              ids.get(i));
           p.addBatch();
         }
         p.executeBatch();
@@ -319,7 +335,12 @@ public final class CommentService implements AutoCloseable {
   }
 
   private void revision(
-      Connection c, FileState state, Map<String, Object> r, String action, String body, String author)
+      Connection c,
+      FileState state,
+      Map<String, Object> r,
+      String action,
+      String body,
+      String author)
       throws SQLException {
     Location l = location(state, r);
     String revision = id(), time = now();
@@ -365,8 +386,7 @@ public final class CommentService implements AutoCloseable {
           String normalized = file(file);
           FileState state = sync(c, normalized);
           if (state.missing()) throw new CommentException("FILE_NOT_FOUND", "源文件不存在");
-          Anchor a =
-              AnchorTracker.capture(state.snapshot().text(), startLine, endLine);
+          Anchor a = AnchorTracker.capture(state.snapshot().text(), startLine, endLine);
           String id = id(), time = now();
           execute(
               c,
@@ -412,7 +432,8 @@ public final class CommentService implements AutoCloseable {
           try (PreparedStatement p =
               c.prepareStatement(
                   "SELECT * FROM comments WHERE file=? AND "
-                      + (includeDeleted ? "1=1" : "deleted=0") + " ORDER BY created,id")) {
+                      + (includeDeleted ? "1=1" : "deleted=0")
+                      + " ORDER BY created,id")) {
             // 每个文件生成结果后即可释放全文快照和行索引，避免累积整个工作区源码。
             for (String f : files) {
               FileState state = sync(c, f);
@@ -482,7 +503,8 @@ public final class CommentService implements AutoCloseable {
             }
           }
           return List.copyOf(result);
-        }, false);
+        },
+        false);
   }
 
   public SnapshotView snapshot(String fileVersionId) {

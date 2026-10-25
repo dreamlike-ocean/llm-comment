@@ -46,8 +46,11 @@ class Cli:
 
 
 class Mcp:
-    def __init__(self, executable, workspace, runtime_args=()):
-        self.process = subprocess.Popen([executable, *runtime_args, '--workspace', str(workspace)], stdin=subprocess.PIPE,
+    def __init__(self, executable, workspace=None, runtime_args=(), cwd=None):
+        command = [executable, *runtime_args]
+        if workspace is not None:
+            command += ['--workspace', str(workspace)]
+        self.process = subprocess.Popen(command, stdin=subprocess.PIPE, cwd=cwd,
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
         self.responses = queue.Queue()
         self.errors = []
@@ -167,6 +170,18 @@ def exercise(client, workspace):
     require(len(ok('history', id=identity)) == 3, '删除未保留历史')
     require(source.read_bytes() == moved_text, '评论操作修改了源码')
 
+    skewed = workspace / '偏斜.java'
+    skewed.write_text('甲', encoding='utf-8')
+    small = ok('create', file=skewed.name, startLine=1, body='计算量超限时保留原文定位')
+    padding = '中文' * 250_000
+    large = padding + '甲' + padding
+    skewed.write_text(large, encoding='utf-8')
+    recovered = ok('get', id=small['id'])
+    require(recovered['location']['status'] == 'ACTIVE'
+            and recovered['location']['startOffset'] == len(padding), '偏斜输入未恢复唯一原文')
+    require(recovered['currentRevisionId'] == small['currentRevisionId'], 'diff降级改变了正文版本')
+    require(skewed.read_text(encoding='utf-8') == large, '偏斜定位改变源码')
+
 
 def exercise_shared(cli_executable, mcp_executable):
     """两个入口通过同一数据库读取历史并检测过时更新。"""
@@ -197,6 +212,65 @@ def exercise_shared(cli_executable, mcp_executable):
     print('CLI/MCP 共享数据库检查通过')
 
 
+def exercise_cli_paths(executable):
+    executable = str(Path(executable).resolve())
+    with tempfile.TemporaryDirectory(prefix='llm-comment-paths-') as temporary:
+        root = Path(temporary)
+        nested = root / '模块' / 'src'
+        nested.mkdir(parents=True)
+        (root / 'pom.xml').write_text('<project>中文</project>\n', encoding='utf-8')
+        (root / '正文.txt').write_text('工作区正文', encoding='utf-8')
+        (nested / '正文.txt').write_text('启动目录正文', encoding='utf-8')
+
+        def call(cwd, *args):
+            result = subprocess.run([executable, *args], cwd=cwd, capture_output=True,
+                                    text=True, encoding='utf-8', timeout=TIMEOUT)
+            require(result.returncode == 0 and not result.stderr, f'路径命令失败: {args}: {result.stderr}')
+            return json.loads(result.stdout)
+
+        inspected = call(root, 'workspace')
+        require(Path(inspected['workspace']) == root and not inspected['databaseExists'], '初始工作区解析错误')
+        require(not (root / '.llm-comments').exists(), 'workspace 查询创建了数据库')
+        created = call(root, 'create', '--file', 'pom.xml', '--lines', '1', '--body', '初稿')
+        for arguments in [('list', 'pom.xml'), ('list', '--file', 'pom.xml'),
+                          ('list', 'pom.xml', '--file', './pom.xml'), ('list', str(root / 'pom.xml'))]:
+            listed = call(nested, *arguments)
+            require(len(listed) == 1 and listed[0]['id'] == created['id'], f'文件参数查询错误: {arguments}')
+        updated = call(nested, 'update', created['id'], '--base-revision', created['currentRevisionId'],
+                       '--body-file', '正文.txt')
+        require(updated['body'] == '工作区正文', '正文路径未以工作区为基准')
+        require(Path(call(nested, 'workspace')['workspace']) == root, '子目录未发现工作区')
+        require(not (nested / '.llm-comments').exists(), '子目录意外创建了数据库')
+        require(Path(call(nested, '--workspace', '.', 'workspace')['workspace']) == nested,
+                '显式工作区未覆盖发现结果')
+    print('CLI 默认工作区和文件参数检查通过')
+
+
+def exercise_mcp_discovery(executable):
+    executable = str(Path(executable).resolve())
+    with tempfile.TemporaryDirectory(prefix='llm-comment-mcp-paths-') as temporary:
+        root = Path(temporary)
+        nested = root / '模块' / 'src'
+        nested.mkdir(parents=True)
+        source = root / '示例.java'
+        source.write_text('源码\n', encoding='utf-8')
+        client = Mcp(executable, root)
+        try:
+            failed, created = client.call('create', file=source.name, startLine=1, body='评论')
+            require(not failed, f'MCP工作区创建失败: {created}')
+        finally:
+            client.close()
+        client = Mcp(executable, cwd=nested)
+        try:
+            failed, listed = client.call('list', file=str(source))
+            require(not failed and len(listed) == 1 and listed[0]['id'] == created['id'],
+                    'MCP默认工作区未与显式工作区共用数据库')
+            require(not (nested / '.llm-comments').exists(), 'MCP在子目录创建了数据库')
+        finally:
+            client.close()
+    print('MCP 默认工作区检查通过')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cli')
@@ -216,6 +290,10 @@ def main():
                 if client is not None:
                     client.close()
         print(f'{name} 原生集成检查通过')
+    if args.cli:
+        exercise_cli_paths(args.cli)
+    if args.mcp:
+        exercise_mcp_discovery(args.mcp)
     if args.cli and args.mcp:
         exercise_shared(args.cli, args.mcp)
 
