@@ -1,10 +1,12 @@
 # llm-comment
 
-供 LLM 使用的本地无头代码评论工具。评论、评论历史和文件快照保存在 SQLite 中，可通过 Java API、命令行或 MCP stdio 访问。源码按 UTF-8 读取，评论操作保持源码字节不变。工具独立于 Git 和 IDE。
+本地代码评论工具，提供供 LLM 使用的 Java API、CLI、MCP stdio，以及 Material 风格的 JavaFX 桌面端。评论、评论历史和文件快照保存在 SQLite 中。源码按 UTF-8 读取，评论操作保持源码字节不变。工具独立于 Git 和 IDE。
 
 ## 构建与运行
 
 构建需要 Java 25 和 Maven。构建 Native Image 时使用包含 `native-image` 的 GraalVM JDK 25，并准备平台所需的 C 工具链。原生集成检查使用 Python 3。
+
+桌面原生构建当前支持 Linux x64，需要 GCC、objcopy、pkg-config、GTK3/X11/OpenGL 开发库。缺少开发包时，脚本在 Debian/Ubuntu 上自动下载解包到用户缓存，无需 sudo。原生 `verify` 会打开测试窗口，需要可用的 `DISPLAY`；无图形环境可以使用 Xvfb。只构建无头模块时，在下列命令中加 `-pl comment-cli,comment-mcp -am`。
 
 ```sh
 # JVM 测试及可执行 JAR
@@ -23,6 +25,7 @@ JAR 位于 `comment-cli/target/comment-cli-0.1.0-SNAPSHOT.jar` 和 `comment-mcp/
 
 - `comment-cli/target/llm-comment`
 - `comment-mcp/target/llm-comment-mcp`
+- `comment-desktop/target/llm-comment-desktop`
 
 可同时启动两个入口，验证共用数据库时的更新、版本冲突及位置同步：
 
@@ -35,6 +38,44 @@ python3 scripts/native_smoke.py \
 Native Image 使用 `--no-fallback`。SQLite JDBC 的平台 JNI 动态库以资源形式嵌入可执行文件，运行时解压加载，运行环境需要可写的临时目录。SQLite 无需另行安装；该方式仍会加载动态库，并非静态链接 SQLite。
 
 已验证的平台是 Linux x64。其他平台需要在目标平台构建并执行验证。
+
+## 桌面端
+
+![JavaFX 原生桌面端截图](docs/desktop.png)
+
+```sh
+# JVM 构建与启动
+mvn -pl comment-desktop -am verify
+java --enable-native-access=ALL-UNNAMED \
+  -jar comment-desktop/target/comment-desktop-0.1.0-SNAPSHOT.jar
+
+# -O3 原生构建与界面测试
+mvn -pl comment-desktop -am -Pnative-release verify
+comment-desktop/target/llm-comment-desktop
+
+# 可选：直接打开项目内的文件
+comment-desktop/target/llm-comment-desktop \
+  --workspace /absolute/project --file src/Main.java
+```
+
+桌面端沿用 CLI 的工作区发现规则，也接受 `--database PATH`。界面中可切换工作区；通过“打开工作区”选择的目录使用默认数据库。启动参数均可省略。
+
+- 左侧逐层浏览目录，支持中英文文件名过滤。双击或 Enter 打开文件、进入目录。
+- 中间显示只读源码、行号、选区和评论标记。点击选行，Shift 选择范围，Ctrl/Cmd+C 复制原文。
+- 右侧创建、修改、删除评论；每次修改形成历史节点。历史页同时展示当时的正文与源码。
+- “刷新”同步外部代码修改和其他进程的评论。源码已变化的新增选区、已过时的正文版本会提示冲突，并保留草稿。
+- 支持浅色、深色主题，Ctrl/Cmd+R 刷新，Ctrl/Cmd+Enter 保存。
+
+核心 API、CLI、MCP 和桌面端可以共用同一 SQLite 数据库。桌面端不提供源码编辑、跨文件重命名跟踪或语法高亮；文件变化通过手动刷新或评论操作同步。
+
+界面测试在临时目录中执行，可单独运行并保存截图：
+
+```sh
+comment-desktop/target/llm-comment-desktop \
+  --smoke-test --screenshot /tmp/llm-comment-desktop.png
+```
+
+原生程序运行时无需 JDK，仍依赖 GTK3、X11、OpenGL 和系统字体。构建固定使用 Gluon JavaFX 静态 SDK 与 Substrate 元数据，无需 Gluon 账户。发布时需保留 `comment-desktop/target/desktop-native/licenses`。具体版本、兼容处理及验证范围见[桌面端设计与构建](docs/desktop-ui.md)。
 
 ## CLI
 
@@ -141,16 +182,17 @@ MCP 启动时使用相同的工作区发现规则，所有工具调用共用启�
 
 ## Java API 与模块
 
-根 `pom.xml` 聚合三个模块并集中管理依赖及构建参数。
+根 `pom.xml` 聚合四个模块并集中管理依赖及构建参数。
 
 | 模块 | 内容 |
 | --- | --- |
 | `comment-core` | Java API、SQLite 存储、文件快照、评论版本和范围定位 |
 | `comment-cli` | 调用 core 的命令行入口及 JSON 输出 |
 | `comment-mcp` | 调用 core 的 MCP stdio 服务 |
+| `comment-desktop` | 调用 core 的 JavaFX 桌面端，含只读源码及评论历史界面 |
 
 core 的数据模型、范围迁移、中文搜索和事务设计见 [comment-core 设计文档](comment-core/DESIGN.md)。
-JavaFX、Swing、Compose 的桌面端比较及 Native Image 验证方案见[桌面端选型](docs/desktop-ui.md)。
+JavaFX 界面结构及 Native Image 构建说明见[桌面端设计](docs/desktop-ui.md)。
 
 `new CommentService()` 使用与 CLI/MCP 相同的工作区发现规则。传入工作区路径的构造方法直接使用该目录，适合需要固定项目位置的调用方：
 
@@ -169,6 +211,8 @@ try (var service = new CommentService(Path.of("/absolute/project"))) {
 ```
 
 `CommentService(Path workspace, Path database)` 可指定数据库。API 抛出 `CommentException`，调用方可读取 `code()` 和 `details()`。
+
+图形界面或编辑器集成可用 `inspect(file, includeDeleted)` 一次取得同一版本的源码快照和评论列表。创建评论时可再传入第六个参数 `expectedFileVersionId`，绑定用户看到的快照；保存前源码变化会返回 `FILE_CONFLICT`，避免旧行号落到另一段代码。原五参数 `create` 保持针对操作时源码创建的行为。
 
 ## 范围定位与历史
 

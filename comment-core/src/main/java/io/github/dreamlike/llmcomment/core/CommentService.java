@@ -380,11 +380,27 @@ public final class CommentService implements AutoCloseable {
   }
 
   public CommentView create(String file, int startLine, int endLine, String body, String author) {
+    return create(file, startLine, endLine, body, author, null);
+  }
+
+  /** 按界面显示的快照创建评论，避免源码变化后把旧行号应用到新文本。 */
+  public CommentView create(
+      String file,
+      int startLine,
+      int endLine,
+      String body,
+      String author,
+      String expectedFileVersionId) {
     return transaction(
         c -> {
           content(body, author);
           String normalized = file(file);
           FileState state = sync(c, normalized);
+          if (expectedFileVersionId != null && !expectedFileVersionId.equals(state.snapshot().id()))
+            throw new CommentException(
+                "FILE_CONFLICT",
+                "源文件已变化，请刷新后重新选择范围",
+                Map.of("currentFileVersionId", state.snapshot().id()));
           if (state.missing()) throw new CommentException("FILE_NOT_FOUND", "源文件不存在");
           Anchor a = AnchorTracker.capture(state.snapshot().text(), startLine, endLine);
           String id = id(), time = now();
@@ -414,6 +430,27 @@ public final class CommentService implements AutoCloseable {
           Map<String, Object> r = required(c, id);
           FileState state = sync(c, str(r, "file"));
           return view(state, required(c, id));
+        });
+  }
+
+  /** 返回同一事务中同步的源码快照及评论位置；文件缺失时保留旧快照。 */
+  public FileComments inspect(String file, boolean includeDeleted) {
+    return transaction(
+        c -> {
+          String normalized = file(file);
+          FileState state = sync(c, normalized);
+          List<CommentView> comments = new ArrayList<>();
+          try (PreparedStatement p =
+              c.prepareStatement(
+                  "SELECT * FROM comments WHERE file=? AND "
+                      + (includeDeleted ? "1=1" : "deleted=0")
+                      + " ORDER BY created,id")) {
+            p.setString(1, normalized);
+            try (ResultSet r = p.executeQuery()) {
+              while (r.next()) comments.add(view(state, row(r)));
+            }
+          }
+          return new FileComments(state.snapshot(), state.missing(), comments);
         });
   }
 

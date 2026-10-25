@@ -1,6 +1,6 @@
 # comment-core 设计
 
-`comment-core` 提供本地代码评论的 Java API。它读取工作区源码，将评论、历史版本、文件快照和范围位置保存在 SQLite 中。CLI 和 MCP 调用同一套 API，定位结果由程序计算。
+`comment-core` 提供本地代码评论的 Java API。它读取工作区源码，将评论、历史版本、文件快照和范围位置保存在 SQLite 中。CLI、MCP 和桌面端调用同一套 API，定位结果由程序计算。
 
 本文描述当前实现。运行方式见[项目说明](../README.md)，测量方法、原始数据和内存取舍见[性能报告](../docs/performance.md)。
 
@@ -17,13 +17,14 @@ IDE 能收到每次文档编辑事件，并据此移动 RangeMarker。本工具�
 
 ## 2. 模块与代码组织
 
-根 Maven 工程聚合 `comment-core`、`comment-cli`、`comment-mcp`。后两个模块分别依赖 core。core 使用 Java 25，运行时依赖为 Xerial SQLite JDBC 与 java-diff-utils；JUnit 属于测试依赖。
+根 Maven 工程聚合 `comment-core`、`comment-cli`、`comment-mcp`、`comment-desktop`。后三个模块分别依赖 core。core 使用 Java 25，运行时依赖为 Xerial SQLite JDBC 与 java-diff-utils；JUnit 属于测试依赖，core 不依赖 JavaFX。
 
 | 类型 | 职责 |
 | --- | --- |
 | [CommentService](src/main/java/io/github/dreamlike/llmcomment/core/CommentService.java) | 工作区路径、SQLite 事务、快照同步、评论与版本 API |
 | [Workspace](src/main/java/io/github/dreamlike/llmcomment/core/Workspace.java) | CLI、MCP 和 Java API 共用的工作区发现及路径解析 |
 | `CommentView` / `RevisionView` / `SnapshotView` | 当前评论、历史节点、文件内容的不可变返回值 |
+| `FileComments` | 同一事务内取得的文件快照、缺失标志及评论列表 |
 | `Location` / `AnchorStatus` | 对外位置与定位状态 |
 | `CommentException` | 稳定的错误代码、说明和补充信息 |
 | `Views` | 将返回值转换为 Map，供 CLI/MCP 序列化 |
@@ -60,8 +61,10 @@ new CommentService(Workspace.resolve(workingDirectory, workspaceOverride, databa
 | 方法 | 返回值 | 源码访问与历史行为 |
 | --- | --- | --- |
 | `create(file, startLine, endLine, body, author)` | `CommentView` | 同步文件、捕获范围，追加 `CREATE` 节点 |
+| `create(file, startLine, endLine, body, author, expectedFileVersionId)` | `CommentView` | 同步后校验预期源码版本，再捕获范围；不一致返回 `FILE_CONFLICT` |
 | `get(id)` | `CommentView` | 同步所属文件，返回当前状态，包括已删除评论 |
 | `list(file, includeDeleted)` | `List<CommentView>` | 同步目标文件；`file == null` 时处理数据库已记录的文件 |
+| `inspect(file, includeDeleted)` | `FileComments` | 同步一次文件，并在同一事务内返回完整快照与评论；无评论的文件也有快照 |
 | `update(id, baseRevisionId, body, author)` | `CommentView` | 同步文件、检查版本，追加 `UPDATE` 节点 |
 | `delete(id, baseRevisionId, author)` | `CommentView` | 同步文件、检查版本，追加 `DELETE` 节点并标记删除 |
 | `history(id)` | `List<RevisionView>` | 从数据库按追加顺序读取节点 |
@@ -72,6 +75,10 @@ new CommentService(Workspace.resolve(workingDirectory, workspaceOverride, databa
 `list` 按 `createdAt`、`id` 排序，`includeDeleted == false` 时过滤已删除评论。工作区列表处理的是数据库中的文件集合，不扫描目录来发现新文件。指定一个尚未记录的文件查询列表时，会先读取并记录该文件快照。
 
 更新或删除需要携带最近一次结果中的 `currentRevisionId`。这检查正文版本是否过时，源码变化则由本次同步处理。自动位置迁移保持 `currentRevisionId` 和评论的 `updatedAt` 不变。
+
+桌面端先调用 `inspect` 显示源码及评论，两者引用同一份快照。用户选行后，创建操作携带该快照的 ID 作为 `expectedFileVersionId`。若用户选择第 250 行后，外部程序在第 100 行新增函数，保存时会拒绝过时的选区并返回 `FILE_CONFLICT`，调用方刷新后重新选择。检查失败回滚整个事务，不追加评论或历史。传入 `null` 保持原创建接口的行为，即针对操作时读取的源码捕获范围。
+
+`inspect` 不接受空文件路径。已记录的文件缺失时返回最后一次快照、`missing == true` 以及缺失状态的评论；未记录且不存在的文件仍报错。`FileComments` 复制评论列表，调用方不能修改返回的列表结构。
 
 ## 4. 数据模型
 
